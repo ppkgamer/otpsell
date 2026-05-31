@@ -34,6 +34,70 @@ function formatTimeAgo(receivedAt, justNowLabel) {
   return `${Math.floor(m / 60)}h ago`
 }
 
+// ── Password Reset Card ───────────────────────────────────────
+function PasswordResetCard({ otp, tick }) {
+  const { lang } = useLang()
+  const status = getStatus(otp.receivedAt)
+  const isExpired = status === 'expired'
+  const timeAgo = formatTimeAgo(otp.receivedAt, lang === 'th' ? 'เพิ่งได้รับ' : 'Just now')
+  const senderName = otp.sender?.replace(/<[^>]+>/, '').replace(/"/g, '').trim()
+  const label   = lang === 'th' ? 'ลิ้งค์เปลี่ยนรหัสผ่าน' : 'Reset Password Link'
+  const btnText = lang === 'th' ? '🔑 เปลี่ยนรหัสผ่าน' : '🔑 Change Password'
+  const expText = lang === 'th' ? 'ลิ้งค์อาจหมดอายุแล้ว' : 'Link may have expired'
+  const warnMsg = lang === 'th' ? 'มีอุปกรณ์ใหม่เข้าสู่ระบบ' : 'New device signed in'
+
+  return (
+    <div className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
+      style={{
+        border: isExpired ? '1px solid rgba(234,88,12,0.25)' : '1px solid rgba(234,179,8,0.4)',
+        background: isExpired ? 'rgba(20,20,30,0.6)' : 'rgba(40,30,5,0.7)',
+        boxShadow: isExpired ? 'none' : '0 0 24px rgba(234,179,8,0.1)',
+      }}>
+
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-[#E50914] rounded flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-black" style={{ fontSize: 9 }}>N</span>
+          </div>
+          <span className={`text-xs font-bold tracking-wide ${isExpired ? 'text-orange-400' : 'text-yellow-400'}`}>
+            {label}
+          </span>
+        </div>
+        <span className="text-xs text-slate-600 font-mono">{timeAgo}</span>
+      </div>
+
+      <div className="mx-4 mt-3 flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
+        <span className="text-yellow-400">⚠</span>
+        <span className="text-xs text-yellow-300 font-medium">{warnMsg}</span>
+      </div>
+
+      {isExpired && (
+        <div className="mx-4 mt-2 flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+          <span className="text-orange-400">⏱</span>
+          <span className="text-xs text-orange-400">{expText}</span>
+        </div>
+      )}
+
+      <div className="px-4 pt-3 pb-3 space-y-0.5">
+        {otp.subject && <div className="text-xs text-slate-500 truncate">{otp.subject}</div>}
+        {senderName && <div className="text-xs text-slate-600 truncate">{senderName}</div>}
+        <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+      </div>
+
+      <div className="px-4 pb-4 mt-auto">
+        <a href={otp.code} target="_blank" rel="noopener noreferrer"
+          className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            isExpired
+              ? 'bg-white/5 text-slate-500 border border-white/10 hover:bg-white/10'
+              : 'bg-yellow-500/90 hover:bg-yellow-400 text-black'
+          }`}>
+          {btnText}
+        </a>
+      </div>
+    </div>
+  )
+}
+
 // ── OTP Card ──────────────────────────────────────────────────
 function OTPCard({ otp, tick }) {
   const [copied, setCopied] = useState(false)
@@ -322,9 +386,9 @@ export default function OTPGrid() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {otps.map(otp =>
-            otp.type === 'household_link'
-              ? <HouseholdCard key={otp.id} otp={otp} tick={tick} />
-              : <OTPCard       key={otp.id} otp={otp} tick={tick} />
+            otp.type === 'household_link'    ? <HouseholdCard      key={otp.id} otp={otp} tick={tick} /> :
+            otp.type === 'password_reset_link' ? <PasswordResetCard key={otp.id} otp={otp} tick={tick} /> :
+            <OTPCard key={otp.id} otp={otp} tick={tick} />
           )}
         </div>
       )}

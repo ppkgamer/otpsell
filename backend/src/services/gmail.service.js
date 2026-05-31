@@ -138,6 +138,69 @@ function extractOTP(text) {
   return null;
 }
 
+// ── Netflix New Device / Password Reset detection ────────────
+function isNetflixNewDevice(subject) {
+  const sub = (subject || '').toLowerCase();
+  const keywords = [
+    // Thai
+    'อุปกรณ์ใหม่', 'เปลี่ยนรหัสผ่าน', 'ใหม่กำลังใช้งาน',
+    // English
+    'new device', 'new sign-in', 'someone signed in', 'signed into',
+    'new login', 'unrecognized device',
+    // Japanese
+    '新しいデバイス', 'パスワードを変更',
+    // Chinese
+    '新设备', '新登录', '更改密码',
+    // Korean
+    '새 기기', '새로운 기기', '비밀번호 변경',
+    // Spanish
+    'nuevo dispositivo', 'nueva sesión', 'cambiar contraseña',
+    // French
+    'nouvel appareil', 'nouvelle connexion', 'changer le mot de passe',
+    // German
+    'neues gerät', 'neue anmeldung', 'passwort ändern',
+    // Portuguese
+    'novo dispositivo', 'nova sessão', 'alterar senha',
+    // Italian
+    'nuovo dispositivo', 'nuovo accesso',
+    // Dutch
+    'nieuw apparaat', 'nieuwe aanmelding',
+  ];
+  return keywords.some(kw => sub.includes(kw));
+}
+
+function extractPasswordResetLink(html) {
+  // หา href ใกล้ keyword เปลี่ยนรหัสผ่าน
+  const ctaTexts = [
+    'เปลี่ยนรหัสผ่าน', 'change.*password', 'reset.*password',
+    'update.*password', 'パスワードを変更', '更改密码', '비밀번호 변경',
+    'cambiar contraseña', 'changer.*mot de passe', 'passwort ändern',
+    'alterar senha', 'change password',
+  ];
+
+  for (const pattern of ctaTexts) {
+    const before = new RegExp(`href="([^"]{20,})"[^>]*>(?:[^<]*<[^>]*>){0,5}[^<]*(?:${pattern})`, 'is');
+    const mBefore = html.match(before);
+    if (mBefore?.[1] && !mBefore[1].includes('unsubscribe') && !mBefore[1].includes('help')) {
+      return mBefore[1].replace(/&amp;/g, '&');
+    }
+    const after = new RegExp(`(?:${pattern})[^<]*(?:<[^>]*>){0,5}[^<]*<a[^>]+href="([^"]{20,})"`, 'is');
+    const mAfter = html.match(after);
+    if (mAfter?.[1] && !mAfter[1].includes('unsubscribe')) {
+      return mAfter[1].replace(/&amp;/g, '&');
+    }
+  }
+
+  // Fallback: หา Netflix password URL
+  const allHrefs = [...html.matchAll(/href="([^"]+)"/gi)].map(m => m[1].replace(/&amp;/g, '&'));
+  for (const href of allHrefs) {
+    if (/netflix\.com.*(?:password|account\/update|security)/i.test(href)) {
+      return href;
+    }
+  }
+  return null;
+}
+
 // ── Netflix Household detection ──────────────────────────────
 function isNetflixHousehold(subject, sender) {
   const sub = (subject || '').toLowerCase();
@@ -332,8 +395,24 @@ async function pollGmailAccount(gmailAccount) {
       continue;
     }
 
+    // Netflix New Device → extract password reset link
+    if (isNetflixNewDevice(subject)) {
+      const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
+      const link = extractPasswordResetLink(htmlBody || body);
+      if (link) {
+        newOtps.push({
+          type: 'password_reset_link',
+          code: link,
+          sender,
+          subject,
+          messageId: msg.id,
+          gmailAccountId: gmailAccount.id,
+          receivedAt,
+        });
+        console.log(`[poll] Netflix password reset link found in ${gmailAccount.email}`);
+      }
     // Netflix Household email → extract confirmation link
-    if (isNetflixHousehold(subject, sender)) {
+    } else if (isNetflixHousehold(subject, sender)) {
       const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
       const link = extractHouseholdLink(htmlBody || body);
       if (link) {
@@ -349,7 +428,7 @@ async function pollGmailAccount(gmailAccount) {
         console.log(`[poll] Netflix household link found in ${gmailAccount.email}`);
       }
     } else {
-      // Netflix email ที่ไม่ใช่ household → ลอง extract OTP
+      // Netflix email ที่ไม่ใช่ household/new-device → ลอง extract OTP
       const code = extractOTP((subject ?? '') + ' ' + body);
       if (code) {
         newOtps.push({
