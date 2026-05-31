@@ -42,7 +42,16 @@ router.get('/', authenticate, async (req, res) => {
       orderBy: { receivedAt: 'desc' },
       take: Math.min(parseInt(limit), 200),
     });
-    res.json(otps);
+
+    // dedup by messageId — ถ้า Gmail เดียวกันเชื่อมกับหลาย account ให้แสดงแค่ครั้งเดียว
+    const seen = new Set();
+    const deduped = otps.filter(o => {
+      if (seen.has(o.messageId)) return false;
+      seen.add(o.messageId);
+      return true;
+    });
+
+    res.json(deduped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

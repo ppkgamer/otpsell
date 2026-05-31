@@ -49,9 +49,9 @@ function PasswordResetCard({ otp, tick }) {
   return (
     <div className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
       style={{
-        border: isExpired ? '1px solid rgba(234,88,12,0.25)' : '1px solid rgba(234,179,8,0.4)',
-        background: isExpired ? 'rgba(20,20,30,0.6)' : 'rgba(40,30,5,0.7)',
-        boxShadow: isExpired ? 'none' : '0 0 24px rgba(234,179,8,0.1)',
+        border: isExpired ? '1px solid rgba(100,100,120,0.25)' : '1px solid rgba(59,130,246,0.35)',
+        background: isExpired ? 'rgba(20,20,30,0.6)' : 'rgba(5,15,40,0.7)',
+        boxShadow: isExpired ? 'none' : '0 0 20px rgba(59,130,246,0.08)',
       }}>
 
       <div className="flex items-center justify-between px-4 pt-4">
@@ -59,16 +59,16 @@ function PasswordResetCard({ otp, tick }) {
           <div className="w-5 h-5 bg-[#E50914] rounded flex items-center justify-center flex-shrink-0">
             <span className="text-white font-black" style={{ fontSize: 9 }}>N</span>
           </div>
-          <span className={`text-xs font-bold tracking-wide ${isExpired ? 'text-orange-400' : 'text-yellow-400'}`}>
+          <span className={`text-xs font-bold tracking-wide ${isExpired ? 'text-slate-500' : 'text-blue-400'}`}>
             {label}
           </span>
         </div>
         <span className="text-xs text-slate-600 font-mono">{timeAgo}</span>
       </div>
 
-      <div className="mx-4 mt-3 flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2">
-        <span className="text-yellow-400">⚠</span>
-        <span className="text-xs text-yellow-300 font-medium">{warnMsg}</span>
+      <div className="mx-4 mt-3 flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
+        <span className="text-blue-400 text-sm">📱</span>
+        <span className="text-xs text-blue-300 font-medium">{warnMsg}</span>
       </div>
 
       {isExpired && (
@@ -89,7 +89,7 @@ function PasswordResetCard({ otp, tick }) {
           className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
             isExpired
               ? 'bg-white/5 text-slate-500 border border-white/10 hover:bg-white/10'
-              : 'bg-yellow-500/90 hover:bg-yellow-400 text-black'
+              : 'bg-blue-600/80 hover:bg-blue-500 text-white'
           }`}>
           {btnText}
         </a>
