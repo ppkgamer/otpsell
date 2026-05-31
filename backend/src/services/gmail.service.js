@@ -50,23 +50,46 @@ async function handleCallback(code, userId) {
   return email;
 }
 
-function shouldSkipEmail(subject, sender) {
-  const sub = (subject || '').toLowerCase();
-  const from = (sender || '').toLowerCase();
+// เช็คว่า email มาจาก Netflix จริงไหม (ต้องเป็น @netflix.com เท่านั้น)
+function isNetflixEmail(sender) {
+  return (sender || '').toLowerCase().includes('@netflix.com');
+}
 
-  // ข้าม Security alerts และ Notification emails ที่ไม่ใช่ OTP
-  const skipPatterns = [
-    'security alert', 'การแจ้งเตือนความปลอดภัย',
-    'sign-in attempt', 'new sign-in', 'new device',
-    'suspicious activity', 'unusual activity',
-    'your account', 'account activity',
-    'password changed', 'password reset',
-    'noreply@accounts.google.com',
-    'no-reply@accounts.google.com',
-    'account-security-noreply@accountprotection.microsoft.com',
+// เช็คว่าเป็น OTP email จาก Netflix (ทุกภาษา)
+function isNetflixOTP(subject, body) {
+  const text = ((subject || '') + ' ' + body).toLowerCase();
+  const keywords = [
+    // English
+    'sign-in code', 'signin code', 'verification code', 'one-time',
+    'your code is', 'access code', 'login code', 'your netflix',
+    // Thai
+    'รหัสการลงชื่อ', 'รหัส netflix', 'รหัสของคุณ',
+    // Japanese
+    'サインインコード', 'コードは', '確認コード',
+    // Chinese
+    '验证码', '登录码', '您的代码',
+    // Korean
+    '로그인 코드', '인증코드', '확인 코드',
+    // Spanish
+    'código de', 'tu código',
+    // French
+    'code de connexion', 'code de vérification', 'votre code',
+    // German
+    'anmeldecode', 'bestätigungscode', 'ihr code',
+    // Portuguese
+    'código de acesso', 'seu código',
+    // Italian
+    'codice di accesso', 'il tuo codice',
+    // Dutch
+    'inlogcode', 'verificatiecode', 'jouw code',
+    // Polish
+    'kod logowania', 'kod weryfikacyjny',
+    // Turkish
+    'giriş kodu', 'doğrulama kodu',
+    // Arabic
+    'رمز', 'كود',
   ];
-
-  return skipPatterns.some(p => sub.includes(p) || from.includes(p));
+  return keywords.some(kw => text.includes(kw));
 }
 
 function extractOTP(text) {
@@ -118,9 +141,8 @@ function extractOTP(text) {
 // ── Netflix Household detection ──────────────────────────────
 function isNetflixHousehold(subject, sender) {
   const sub = (subject || '').toLowerCase();
-  const from = (sender || '').toLowerCase();
-  // รับเฉพาะจาก info@account.netflix.com เท่านั้น
-  if (!from.includes('info@account.netflix.com')) return false;
+  // เช็ค Netflix ก่อนเลย (ผ่านแล้วค่อยเช็ค subject)
+  if (!isNetflixEmail(sender)) return false;
 
   const keywords = [
     // English
@@ -305,9 +327,8 @@ async function pollGmailAccount(gmailAccount) {
     const body = getBodyFromPayload(detail.data.payload);
     const receivedAt = dateStr ? new Date(dateStr) : new Date();
 
-    // ข้าม Security alerts และ Notification emails
-    if (shouldSkipEmail(subject, sender)) {
-      console.log(`[poll] Skipped (security/notification): ${subject}`);
+    // ── เช็ค Netflix ก่อนเลย ถ้าไม่ใช่ข้ามทันที ──
+    if (!isNetflixEmail(sender)) {
       continue;
     }
 
@@ -327,8 +348,8 @@ async function pollGmailAccount(gmailAccount) {
         });
         console.log(`[poll] Netflix household link found in ${gmailAccount.email}`);
       }
-    } else {
-      // Normal email → extract OTP digits
+    } else if (isNetflixOTP(subject, body)) {
+      // Netflix OTP email → extract OTP digits
       const code = extractOTP((subject ?? '') + ' ' + body);
       if (code) {
         newOtps.push({
