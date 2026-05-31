@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+  SUBUSER
+}
+
+enum Plan {
+  FREE
+  BASIC
+  PRO
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  username      String         @unique
+  password      String
+  role          Role           @default(USER)
+  plan          Plan           @default(FREE)
+  isActive      Boolean        @default(true)
+  code          String?        @unique
+  parentId      String?
+  parent        User?          @relation("SubUsers", fields: [parentId], references: [id])
+  subUsers      User[]         @relation("SubUsers")
+  gmailAccounts GmailAccount[]
+  assignedGmails SubUserGmail[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model GmailAccount {
+  id           String         @id @default(uuid())
+  email        String
+  accessToken  String
+  refreshToken String
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  otps         Otp[]
+  assignedTo   SubUserGmail[]
+  lastPolledAt DateTime?
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([userId, email])
+}
+
+model SubUserGmail {
+  id             String       @id @default(uuid())
+  subUserId      String
+  subUser        User         @relation(fields: [subUserId], references: [id], onDelete: Cascade)
+  gmailAccountId String
+  gmailAccount   GmailAccount @relation(fields: [gmailAccountId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([subUserId, gmailAccountId])
+}
+
+model Otp {
+  id             String       @id @default(uuid())
+  type           String       @default("otp") // "otp" | "household_link"
+  code           String
+  sender         String?
+  subject        String?
+  messageId      String
+  gmailAccountId String
+  gmailAccount   GmailAccount @relation(fields: [gmailAccountId], references: [id], onDelete: Cascade)
+  receivedAt     DateTime
+  createdAt      DateTime     @default(now())
+
+  @@unique([messageId, gmailAccountId])
+}
+

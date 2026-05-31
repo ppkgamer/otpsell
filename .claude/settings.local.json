@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(node --use-system-ca node_modules/.bin/prisma generate)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx prisma generate)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx prisma db push)",
+      "Bash(node prisma/seed.js)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(curl *)",
+      "Bash(pkill -f \"node src/index.js\")",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(xargs -I{} curl -s http://localhost:3001/api/gmail/connect -H \"Authorization: Bearer {}\")",
+      "Read(//tmp/**)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 npx prisma db push --accept-data-loss)",
+      "Bash(node -e ' *)",
+      "PowerShell(Get-Process *)",
+      "Bash(node test-household.js)",
+      "Bash(python3 -c ' *)",
+      "Bash(node send-test-netflix.js)"
+    ]
+  }
+}
