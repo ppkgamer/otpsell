@@ -348,8 +348,8 @@ async function pollGmailAccount(gmailAccount) {
         });
         console.log(`[poll] Netflix household link found in ${gmailAccount.email}`);
       }
-    } else if (isNetflixOTP(subject, body)) {
-      // Netflix OTP email → extract OTP digits
+    } else {
+      // Netflix email ที่ไม่ใช่ household → ลอง extract OTP
       const code = extractOTP((subject ?? '') + ' ' + body);
       if (code) {
         newOtps.push({
@@ -361,6 +361,7 @@ async function pollGmailAccount(gmailAccount) {
           gmailAccountId: gmailAccount.id,
           receivedAt,
         });
+        console.log(`[poll] Netflix OTP found: ${code} in ${gmailAccount.email}`);
       }
     }
   }

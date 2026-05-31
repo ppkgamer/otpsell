@@ -227,7 +227,7 @@ function HouseholdCard({ otp, tick }) {
 export default function OTPGrid() {
   const [otps, setOtps] = useState([])
   const [loading, setLoading] = useState(true)
-  const [countdown, setCountdown] = useState(10)
+  const [countdown, setCountdown] = useState(5)
   const [tick, setTick] = useState(0)
   const [lastUpdated, setLastUpdated] = useState(null)
   const { t, lang } = useLang()
@@ -249,7 +249,7 @@ export default function OTPGrid() {
   // Refresh countdown
   useEffect(() => {
     const t = setInterval(() => {
-      setCountdown(p => { if (p <= 1) { fetchOtps(); return 10 } return p - 1 })
+      setCountdown(p => { if (p <= 1) { fetchOtps(); return 5 } return p - 1 })
     }, 1000)
     return () => clearInterval(t)
   }, [fetchOtps])
@@ -303,7 +303,7 @@ export default function OTPGrid() {
             {String(countdown).padStart(2, '0')}s
           </div>
           <button
-            onClick={() => { fetchOtps(); setCountdown(10) }}
+            onClick={() => { fetchOtps(); setCountdown(5) }}
             className="text-xs text-purple-400/70 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 px-3 py-1 rounded-lg hover:bg-purple-500/10 transition-all"
           >
             ↻
