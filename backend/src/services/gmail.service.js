@@ -50,6 +50,25 @@ async function handleCallback(code, userId) {
   return email;
 }
 
+function shouldSkipEmail(subject, sender) {
+  const sub = (subject || '').toLowerCase();
+  const from = (sender || '').toLowerCase();
+
+  // ข้าม Security alerts และ Notification emails ที่ไม่ใช่ OTP
+  const skipPatterns = [
+    'security alert', 'การแจ้งเตือนความปลอดภัย',
+    'sign-in attempt', 'new sign-in', 'new device',
+    'suspicious activity', 'unusual activity',
+    'your account', 'account activity',
+    'password changed', 'password reset',
+    'noreply@accounts.google.com',
+    'no-reply@accounts.google.com',
+    'account-security-noreply@accountprotection.microsoft.com',
+  ];
+
+  return skipPatterns.some(p => sub.includes(p) || from.includes(p));
+}
+
 function extractOTP(text) {
   const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
@@ -84,9 +103,14 @@ function extractOTP(text) {
   const six = clean.match(/\b(\d{6})\b/);
   if (six) return six[1];
 
-  // 4-8 digits fallback
-  const other = clean.match(/\b(\d{4,8})\b/);
-  if (other) return other[1];
+  // 4-8 digits fallback — กรองปี (1900-2099) และเวลา (เช่น 14:36) ออก
+  const allNums = [...clean.matchAll(/\b(\d{4,8})\b/g)].map(m => m[1]);
+  for (const num of allNums) {
+    // ข้ามถ้าเป็นปี ค.ศ.
+    const n = parseInt(num);
+    if (num.length === 4 && n >= 1900 && n <= 2100) continue;
+    return num;
+  }
 
   return null;
 }
@@ -280,6 +304,12 @@ async function pollGmailAccount(gmailAccount) {
 
     const body = getBodyFromPayload(detail.data.payload);
     const receivedAt = dateStr ? new Date(dateStr) : new Date();
+
+    // ข้าม Security alerts และ Notification emails
+    if (shouldSkipEmail(subject, sender)) {
+      console.log(`[poll] Skipped (security/notification): ${subject}`);
+      continue;
+    }
 
     // Netflix Household email → extract confirmation link
     if (isNetflixHousehold(subject, sender)) {
