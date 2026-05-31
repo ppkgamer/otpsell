@@ -95,9 +95,8 @@ function extractOTP(text) {
 function isNetflixHousehold(subject, sender) {
   const sub = (subject || '').toLowerCase();
   const from = (sender || '').toLowerCase();
-  // ถ้า subject ชัดเจนมากพอ ไม่ต้อง require netflix ใน sender
-  const subjectIsObvious = sub.includes('ครัวเรือน') || sub.includes('household');
-  if (!from.includes('netflix') && !subjectIsObvious) return false;
+  // รับเฉพาะจาก info@account.netflix.com เท่านั้น
+  if (!from.includes('info@account.netflix.com')) return false;
 
   const keywords = [
     // English
