@@ -50,9 +50,9 @@ async function handleCallback(code, userId) {
   return email;
 }
 
-// เช็คว่า email มาจาก Netflix จริงไหม (ต้องเป็น @netflix.com เท่านั้น)
+// เช็คว่า email มาจาก Netflix จริงไหม (domain ต้องลงท้ายด้วย netflix.com)
 function isNetflixEmail(sender) {
-  return (sender || '').toLowerCase().includes('@netflix.com');
+  return (sender || '').toLowerCase().includes('netflix.com');
 }
 
 // เช็คว่าเป็น OTP email จาก Netflix (ทุกภาษา)
