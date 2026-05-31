@@ -201,6 +201,19 @@ router.post('/subuser/:subUserId/assign', authenticate, requireRole(['USER']), a
     if (!subUser) return res.status(404).json({ error: 'Sub-user not found' });
     const gmail = await prisma.gmailAccount.findFirst({ where: { id: gmailAccountId, userId: req.userId } });
     if (!gmail) return res.status(404).json({ error: 'Gmail account not found' });
+
+    // เช็คว่า Gmail นี้ถูก assign ให้ sub-user อื่นของ user นี้แล้วหรือยัง
+    const alreadyAssigned = await prisma.subUserGmail.findFirst({
+      where: {
+        gmailAccountId,
+        subUserId: { not: subUserId },
+        subUser: { parentId: req.userId },
+      },
+    });
+    if (alreadyAssigned) {
+      return res.status(400).json({ error: 'Gmail นี้ถูก assign ให้ sub-user อื่นแล้ว' });
+    }
+
     const assignment = await prisma.subUserGmail.create({ data: { subUserId, gmailAccountId } });
     res.json(assignment);
   } catch (err) {

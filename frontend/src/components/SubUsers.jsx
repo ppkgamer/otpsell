@@ -72,8 +72,15 @@ export default function SubUsers() {
   }
 
   const getAvailable = su => {
-    const ids = su.assignedGmails.map(a => a.gmailAccount.id)
-    return gmailAccounts.filter(g => !ids.includes(g.id))
+    // Gmail ที่ assign ให้ sub-user อื่นแล้ว (ห้ามซ้ำ)
+    const assignedToOthers = new Set(
+      subUsers
+        .filter(other => other.id !== su.id)
+        .flatMap(other => other.assignedGmails.map(a => a.gmailAccount.id))
+    )
+    // Gmail ที่ assign ให้ sub-user นี้แล้ว
+    const myIds = new Set(su.assignedGmails.map(a => a.gmailAccount.id))
+    return gmailAccounts.filter(g => !assignedToOthers.has(g.id) && !myIds.has(g.id))
   }
 
   return (
