@@ -8,7 +8,8 @@ const {
 
 const prisma = new PrismaClient();
 
-const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';
+// /consumers = personal Microsoft accounts (Hotmail, Outlook.com, Live)
+const MS_AUTH_BASE   = 'https://login.microsoftonline.com/consumers/oauth2/v2.0';
 const GRAPH_BASE     = 'https://graph.microsoft.com/v1.0';
 const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access';
 
