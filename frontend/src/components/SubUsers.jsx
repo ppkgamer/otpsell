@@ -36,7 +36,15 @@ export default function SubUsers() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
   const [busy, setBusy] = useState({})
-  const [selectValues, setSelectValues] = useState({})
+  const [multiSel, setMultiSel] = useState({})
+
+  const toggleSel = (suId, gmailId) =>
+    setMultiSel(p => {
+      const cur = p[suId] || []
+      return { ...p, [suId]: cur.includes(gmailId) ? cur.filter(id => id !== gmailId) : [...cur, gmailId] }
+    })
+  const selAll   = (suId, list) => setMultiSel(p => ({ ...p, [suId]: list.map(g => g.id) }))
+  const clearSel = (suId)       => setMultiSel(p => ({ ...p, [suId]: [] }))
   const [dialog, setDialog] = useState(null)
   const [expandedGmails, setExpandedGmails] = useState({})
   const { t, lang } = useLang()
@@ -243,28 +251,80 @@ export default function SubUsers() {
                   )}
                 </div>
 
-                {/* Add Gmail */}
+                {/* Add Gmail — multi-select */}
                 {gmailAccounts.length === 0 ? (
                   <div className="text-xs text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
                     {t('sub_gmail_no_gmail')}
                   </div>
                 ) : available.length > 0 ? (
-                  <div className="flex flex-col xs:flex-row gap-2">
-                    <select value={selectValues[su.id] || ''}
-                      onChange={e => setSelectValues(p => ({ ...p, [su.id]: e.target.value }))}
-                      className="flex-1 bg-card2 border border-app rounded-xl px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-purple-500 min-w-0">
-                      <option value="">{t('sub_gmail_select')}</option>
-                      {available.map(g => <option key={g.id} value={g.id}>{g.email}</option>)}
-                    </select>
+                  <div className="space-y-2">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-500 font-medium">
+                        {lang === 'th' ? 'เพิ่ม Gmail' : 'Add Gmail'}
+                        {(multiSel[su.id]?.length > 0) && (
+                          <span className="ml-1.5 text-purple-400 font-semibold">· {multiSel[su.id].length} {lang === 'th' ? 'เลือก' : 'selected'}</span>
+                        )}
+                      </span>
+                      <div className="flex gap-2.5">
+                        <button onClick={() => selAll(su.id, available)}
+                          className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+                          {t('sub_select_all')}
+                        </button>
+                        {(multiSel[su.id]?.length > 0) && (
+                          <button onClick={() => clearSel(su.id)}
+                            className="text-xs text-slate-500 hover:text-slate-400 transition-colors">
+                            {t('sub_clear_sel')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Checkbox list */}
+                    <div className="space-y-1.5">
+                      {available.map(g => {
+                        const isSel = (multiSel[su.id] || []).includes(g.id)
+                        return (
+                          <label key={g.id}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer select-none transition-all active:scale-[0.98] ${
+                              isSel ? 'bg-purple-500/10 border-purple-500/30' : 'border-app hover:border-slate-600'
+                            }`}>
+                            {/* Custom checkbox */}
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                              isSel ? 'bg-purple-500 border-purple-500' : 'border-slate-600'
+                            }`}>
+                              {isSel && <span className="text-white text-[9px] font-black leading-none">✓</span>}
+                            </div>
+                            <input type="checkbox" checked={isSel}
+                              onChange={() => toggleSel(su.id, g.id)}
+                              className="sr-only" />
+                            <span className="text-sm text-slate-300 font-mono truncate">{g.email}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+
+                    {/* Assign button */}
                     <button
                       onClick={() => op(`a-${su.id}`, async () => {
-                        if (!selectValues[su.id]) return
-                        await api.post(`/auth/subuser/${su.id}/assign`, { gmailAccountId: selectValues[su.id] })
-                        setSelectValues(p => ({ ...p, [su.id]: '' }))
+                        const selected = multiSel[su.id] || []
+                        if (!selected.length) return
+                        for (const gmailId of selected) {
+                          await api.post(`/auth/subuser/${su.id}/assign`, { gmailAccountId: gmailId })
+                        }
+                        clearSel(su.id)
                       })}
-                      disabled={busy[`a-${su.id}`] || !selectValues[su.id]}
-                      className="btn-primary px-4 py-2 text-sm disabled:opacity-40 flex-shrink-0">
-                      {busy[`a-${su.id}`] ? '...' : t('sub_assign')}
+                      disabled={busy[`a-${su.id}`] || !(multiSel[su.id]?.length)}
+                      className="btn-primary w-full py-2.5 text-sm disabled:opacity-40 transition-all">
+                      {busy[`a-${su.id}`]
+                        ? <span className="flex items-center justify-center gap-2">
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            {lang === 'th' ? 'กำลัง assign...' : 'Assigning...'}
+                          </span>
+                        : multiSel[su.id]?.length
+                          ? t('sub_assign_n').replace('{n}', multiSel[su.id].length)
+                          : t('sub_select_first')
+                      }
                     </button>
                   </div>
                 ) : (
