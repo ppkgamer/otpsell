@@ -8,10 +8,10 @@ const {
 
 const prisma = new PrismaClient();
 
-// /common = both personal (Hotmail/Outlook.com) + organizational accounts
+// /common = personal (Hotmail/Outlook.com) + organizational accounts
 const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';
 const GRAPH_BASE     = 'https://graph.microsoft.com/v1.0';
-const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access';
+const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access openid profile email';
 
 function getAuthUrl(userId) {
   const params = new URLSearchParams({
@@ -19,9 +19,7 @@ function getAuthUrl(userId) {
     response_type: 'code',
     redirect_uri:  process.env.MS_REDIRECT_URI,
     scope:         SCOPES,
-    response_mode: 'query',
     state:         userId,
-    prompt:        'select_account',
   });
   return `${MS_AUTH_BASE}/authorize?${params}`;
 }

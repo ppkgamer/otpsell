@@ -7,6 +7,17 @@ const PLANS = require('../config/plans');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// GET /api/hotmail/debug — returns generated auth URL for inspection
+router.get('/debug', authenticate, async (req, res) => {
+  const url = getAuthUrl(req.userId);
+  res.json({
+    url,
+    MS_CLIENT_ID:    process.env.MS_CLIENT_ID ? 'SET' : 'MISSING',
+    MS_CLIENT_SECRET:process.env.MS_CLIENT_SECRET ? 'SET' : 'MISSING',
+    MS_REDIRECT_URI: process.env.MS_REDIRECT_URI || 'MISSING',
+  });
+});
+
 // GET /api/hotmail/connect
 router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req, res) => {
   try {
