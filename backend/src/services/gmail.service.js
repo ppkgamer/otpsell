@@ -55,19 +55,24 @@ function isNetflixEmail(sender) {
   return (sender || '').toLowerCase().includes('netflix.com');
 }
 
+// ตัด URL ออกจาก text ก่อนวิเคราะห์ — Netflix show ID (8 หลัก) อยู่ใน URL เสมอ
+function stripUrls(str) {
+  return str.replace(/https?:\/\/[^\s<>"']+/gi, ' ');
+}
+
 // เช็คว่าเป็น OTP email จาก Netflix (ทุกภาษา)
 // ใช้ fragment สั้นๆ แทน phrase ยาว + แยก subject/body check เพื่อความยืดหยุ่น
 function isNetflixOTP(subject, body) {
-  const sub  = (subject || '').toLowerCase();
-  const bod  = (body    || '').toLowerCase();
+  const sub = (subject || '').toLowerCase();
+  // ตัด URL ออกก่อน เพื่อกัน show ID ที่ฝังใน /watch/xxxxxxxx ไม่ให้นับเป็น OTP
+  const bod = stripUrls((body || '').toLowerCase());
 
-  // Fragment keywords — ครอบคลุมทุกภาษา ไม่ต้องตรงทั้ง phrase
   const fragments = [
     // English
     'otp', 'pin', 'passcode', 'one-time', 'sign-in code', 'signin code',
     'login code', 'access code', 'verify', 'verification',
-    // Thai
-    'รหัส',
+    // Thai — เฉพาะ phrase ที่เจาะจง ไม่ใช่แค่ 'รหัส' คำเดียว
+    'รหัสการลงชื่อ', 'รหัสยืนยัน', 'รหัส otp', 'รหัสเข้า',
     // Japanese
     'コード', '確認', '認証', 'ワンタイム',
     // Chinese (Simplified + Traditional)
@@ -85,32 +90,32 @@ function isNetflixOTP(subject, body) {
     // Dutch
     'verificat',
     // Polish
-    'kod',
+    'kod weryfikacyjny', 'kod logowania',
     // Turkish
     'doğrulama', 'giriş kodu',
     // Arabic
-    'رمز', 'كود', 'تحقق',
+    'رمز التحقق', 'كود التحقق', 'رمز الدخول',
     // Russian
-    'код', 'подтвер',
+    'код подтверждения', 'подтвер',
     // Vietnamese
     'mã xác', 'xác nhận',
     // Indonesian / Malay
-    'kode', 'verifikasi',
+    'kode verifikasi', 'kode masuk',
     // Hindi
     'कोड',
   ];
 
-  const matchSub  = fragments.some(f => sub.includes(f));
-  const matchBod  = fragments.some(f => bod.includes(f));
-  const hasDigits = /\b\d{4,8}\b/.test(bod);
+  const matchSub = fragments.some(f => sub.includes(f));
+  const matchBod = fragments.some(f => bod.includes(f));
+  // Netflix OTP จริงๆ เป็น 4-6 หลักเสมอ — 8 หลักคือ show ID ไม่ใช่ OTP
+  const hasOTPDigits = /\b\d{4,6}\b/.test(bod);
 
   // subject มี keyword → เชื่อเลย
-  // body มี keyword + มีตัวเลข 4-8 หลัก → โอกาสสูงว่าเป็น OTP จริง
-  return matchSub || (matchBod && hasDigits);
+  // body มี keyword + มีตัวเลข 4-6 หลัก (หลังตัด URL แล้ว) → OTP จริง
+  return matchSub || (matchBod && hasOTPDigits);
 }
-
 function extractOTP(text) {
-  const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  const clean = stripUrls(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
   // Keywords across major languages
   const keywordPattern = [
