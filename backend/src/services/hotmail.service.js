@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 // /common = personal (Hotmail/Outlook.com) + organizational accounts
 const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';
 const GRAPH_BASE     = 'https://graph.microsoft.com/v1.0';
-const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access';
+const SCOPES         = 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read offline_access';
 
 function getAuthUrl(userId) {
   // ใช้ encodeURIComponent แทน URLSearchParams เพื่อกัน space → %20 (ไม่ใช่ +)
