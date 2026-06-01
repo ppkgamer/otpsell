@@ -45,6 +45,7 @@ export default function SubUsers() {
     })
   const selAll   = (suId, list) => setMultiSel(p => ({ ...p, [suId]: list.map(g => g.id) }))
   const clearSel = (suId)       => setMultiSel(p => ({ ...p, [suId]: [] }))
+  const [search, setSearch] = useState('')
   const [dialog, setDialog] = useState(null)
   const [expandedGmails, setExpandedGmails] = useState({})
   const { t, lang } = useLang()
@@ -81,6 +82,14 @@ export default function SubUsers() {
     setBusy(p => ({ ...p, [key]: true }))
     try { await fn(); await load() } finally { setBusy(p => ({ ...p, [key]: false })) }
   }
+
+  const q = search.trim().toLowerCase()
+  const filtered = q
+    ? subUsers.filter(su =>
+        su.username.toLowerCase().includes(q) ||
+        su.code.toLowerCase().includes(q)
+      )
+    : subUsers
 
   const getAvailable = su => {
     // Gmail ที่ assign ให้ sub-user อื่นแล้ว (ห้ามซ้ำ)
@@ -133,6 +142,25 @@ export default function SubUsers() {
         </form>
       )}
 
+      {!loading && subUsers.length > 0 && (
+        <div className="relative mb-4">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-sm">🔍</span>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={lang === 'th' ? 'ค้นหาชื่อหรือ Code...' : 'Search name or code...'}
+            className="input-dark w-full pl-9 pr-9"
+          />
+          {search && (
+            <button onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors text-sm">
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-3">{[1,2].map(i => <ListRowSkeleton key={i} />)}</div>
       ) : subUsers.length === 0 ? (
@@ -141,9 +169,19 @@ export default function SubUsers() {
           <p className="text-slate-400 font-medium">{t('sub_empty_title')}</p>
           <p className="text-slate-600 text-sm mt-1">{t('sub_empty_sub')}</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+          <div className="w-12 h-12 rounded-2xl bg-slate-500/10 border border-slate-500/20 flex items-center justify-center text-2xl mb-3">🔍</div>
+          <p className="text-slate-400 font-medium">
+            {lang === 'th' ? `ไม่พบ "${search}"` : `No results for "${search}"`}
+          </p>
+          <button onClick={() => setSearch('')} className="text-xs text-purple-400 mt-2 hover:text-purple-300">
+            {lang === 'th' ? 'ล้างการค้นหา' : 'Clear search'}
+          </button>
+        </div>
       ) : (
         <div className="space-y-4">
-          {subUsers.map(su => {
+          {filtered.map(su => {
             const available = getAvailable(su)
             return (
               <div key={su.id} className={`card-dark p-4 sm:p-5 ${!su.isActive ? 'opacity-50' : ''}`}>
