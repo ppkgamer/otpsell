@@ -11,17 +11,18 @@ const prisma = new PrismaClient();
 // /common = personal (Hotmail/Outlook.com) + organizational accounts
 const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';
 const GRAPH_BASE     = 'https://graph.microsoft.com/v1.0';
-const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access openid profile email';
+const SCOPES         = 'https://graph.microsoft.com/Mail.Read offline_access';
 
 function getAuthUrl(userId) {
-  const params = new URLSearchParams({
-    client_id:     process.env.MS_CLIENT_ID,
-    response_type: 'code',
-    redirect_uri:  process.env.MS_REDIRECT_URI,
-    scope:         SCOPES,
-    state:         userId,
-  });
-  return `${MS_AUTH_BASE}/authorize?${params}`;
+  // ใช้ encodeURIComponent แทน URLSearchParams เพื่อกัน space → %20 (ไม่ใช่ +)
+  const q = [
+    `client_id=${process.env.MS_CLIENT_ID}`,
+    `response_type=code`,
+    `redirect_uri=${encodeURIComponent(process.env.MS_REDIRECT_URI)}`,
+    `scope=${encodeURIComponent(SCOPES)}`,
+    `state=${encodeURIComponent(userId)}`,
+  ].join('&');
+  return `${MS_AUTH_BASE}/authorize?${q}`;
 }
 
 async function getTokens(code) {
