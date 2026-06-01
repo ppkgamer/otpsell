@@ -127,4 +127,52 @@ router.get('/plans', authenticate, requireRole(['ADMIN']), (req, res) => {
   res.json(PLANS);
 });
 
+// DELETE /api/admin/subusers/:subUserId — admin deletes a sub-user
+router.delete('/subusers/:subUserId', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const su = await prisma.user.findFirst({ where: { id: req.params.subUserId, role: 'SUBUSER' } });
+    if (!su) return res.status(404).json({ error: 'Sub-user not found' });
+    await prisma.user.delete({ where: { id: req.params.subUserId } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/subusers/:subUserId/assign — admin assigns gmail to sub-user
+router.post('/subusers/:subUserId/assign', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { gmailAccountId } = req.body;
+    const su = await prisma.user.findFirst({ where: { id: req.params.subUserId, role: 'SUBUSER' } });
+    if (!su) return res.status(404).json({ error: 'Sub-user not found' });
+    const gmail = await prisma.gmailAccount.findFirst({ where: { id: gmailAccountId, userId: su.parentId } });
+    if (!gmail) return res.status(404).json({ error: 'Gmail not found or not owned by this user' });
+
+    const alreadyAssigned = await prisma.subUserGmail.findFirst({
+      where: { gmailAccountId, subUserId: { not: req.params.subUserId }, subUser: { parentId: su.parentId } },
+    });
+    if (alreadyAssigned) return res.status(400).json({ error: 'Gmail already assigned to another sub-user' });
+
+    const assignment = await prisma.subUserGmail.create({
+      data: { subUserId: req.params.subUserId, gmailAccountId },
+    });
+    res.json(assignment);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(400).json({ error: 'Already assigned' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/subusers/:subUserId/assign/:gmailAccountId — admin removes gmail assignment
+router.delete('/subusers/:subUserId/assign/:gmailAccountId', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    await prisma.subUserGmail.deleteMany({
+      where: { subUserId: req.params.subUserId, gmailAccountId: req.params.gmailAccountId },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
