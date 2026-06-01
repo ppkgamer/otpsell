@@ -427,8 +427,8 @@ async function pollGmailAccount(gmailAccount) {
         });
         console.log(`[poll] Netflix household link found in ${gmailAccount.email}`);
       }
-    } else {
-      // Netflix email ที่ไม่ใช่ household/new-device → ลอง extract OTP
+    } else if (isNetflixOTP(subject, body)) {
+      // เฉพาะ Netflix OTP email จริงๆ (มี keyword รหัส/code/sign-in) เท่านั้น
       const code = extractOTP((subject ?? '') + ' ' + body);
       if (code) {
         newOtps.push({
