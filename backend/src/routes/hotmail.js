@@ -37,8 +37,9 @@ router.get('/callback', async (req, res) => {
     const email = await handleCallback(code, userId);
     res.redirect(`${frontendUrl}/dashboard?hotmail=connected&email=${encodeURIComponent(email)}`);
   } catch (err) {
-    console.error('[hotmail] OAuth callback error:', err.message);
-    res.redirect(`${frontendUrl}/dashboard?hotmail=error`);
+    console.error('[hotmail] OAuth callback error:', err.message, err.response?.data);
+    const reason = encodeURIComponent(err.message || 'unknown');
+    res.redirect(`${frontendUrl}/dashboard?hotmail=error&reason=${reason}`);
   }
 });
 

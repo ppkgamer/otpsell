@@ -47,7 +47,8 @@ export default function Dashboard() {
       setActiveTab('gmail')
       setSearchParams({})
     } else if (hotmailStatus === 'error') {
-      showToast('error', t('toast_gmail_error'))
+      const reason = searchParams.get('reason')
+      showToast('error', reason ? `Hotmail error: ${decodeURIComponent(reason)}` : t('toast_gmail_error'))
       setSearchParams({})
     }
   }, [])
