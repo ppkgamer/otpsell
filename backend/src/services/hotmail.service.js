@@ -55,35 +55,28 @@ async function refreshAccessToken(refreshToken) {
   return res.data;
 }
 
-async function getGraphClient(account) {
-  let token = account.accessToken;
+async function getValidToken(account) {
+  return account.accessToken;
+}
 
-  // Try a simple profile call — if 401 refresh token
-  try {
-    await axios.get(`${GRAPH_BASE}/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch (err) {
-    if (err.response?.status === 401) {
-      const refreshed = await refreshAccessToken(account.refreshToken);
-      token = refreshed.access_token;
-      await prisma.gmailAccount.update({
-        where: { id: account.id },
-        data: {
-          accessToken:  token,
-          ...(refreshed.refresh_token && { refreshToken: refreshed.refresh_token }),
-        },
-      });
-    } else throw err;
-  }
-  return token;
+async function refreshIfNeeded(account, err) {
+  if (err.response?.status !== 401) throw err;
+  const refreshed = await refreshAccessToken(account.refreshToken);
+  const newToken = refreshed.access_token;
+  await prisma.gmailAccount.update({
+    where: { id: account.id },
+    data: {
+      accessToken: newToken,
+      ...(refreshed.refresh_token && { refreshToken: refreshed.refresh_token }),
+    },
+  });
+  return newToken;
 }
 
 async function handleCallback(code, userId) {
   const tokens = await getTokens(code);
 
-  // Get user email via Graph
-  const res = await axios.get(`${GRAPH_BASE}/me`, {
+  const res = await axios.get(`${GRAPH_BASE}/me?$select=mail,userPrincipalName`, {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   const email = res.data.mail || res.data.userPrincipalName;
@@ -113,21 +106,36 @@ function isNetflixSender(sender) {
 }
 
 async function pollHotmailAccount(account) {
-  const token = await getGraphClient(account);
+  let token = await getValidToken(account);
 
   const since = account.lastPolledAt
     ? account.lastPolledAt.toISOString()
     : new Date(Date.now() - 30000).toISOString();
 
-  const listRes = await axios.get(`${GRAPH_BASE}/me/messages`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: {
-      $filter:  `receivedDateTime gt ${since}`,
-      $top:     10,
-      $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
-      $orderby: 'receivedDateTime desc',
-    },
-  });
+  let listRes;
+  try {
+    listRes = await axios.get(`${GRAPH_BASE}/me/messages`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        $filter:  `receivedDateTime gt ${since}`,
+        $top:     10,
+        $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
+        $orderby: 'receivedDateTime desc',
+      },
+    });
+  } catch (err) {
+    // token หมดอายุ — refresh แล้วลองใหม่
+    token = await refreshIfNeeded(account, err);
+    listRes = await axios.get(`${GRAPH_BASE}/me/messages`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        $filter:  `receivedDateTime gt ${since}`,
+        $top:     10,
+        $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
+        $orderby: 'receivedDateTime desc',
+      },
+    });
+  }
 
   const messages = listRes.data.value || [];
   const newOtps  = [];
