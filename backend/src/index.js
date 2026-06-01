@@ -9,6 +9,7 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/auth');
 const gmailRoutes = require('./routes/gmail');
+const hotmailRoutes = require('./routes/hotmail');
 const otpRoutes = require('./routes/otp');
 const adminRoutes = require('./routes/admin');
 const { startPollingJob } = require('./jobs/pollEmails');
@@ -21,6 +22,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/gmail', gmailRoutes);
+app.use('/api/hotmail', hotmailRoutes);
 app.use('/api/otp', otpRoutes);
 app.use('/api/admin', adminRoutes);
 

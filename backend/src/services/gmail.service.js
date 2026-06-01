@@ -475,4 +475,9 @@ async function pollGmailAccount(gmailAccount) {
   return newOtps;
 }
 
-module.exports = { getAuthUrl, handleCallback, pollGmailAccount, isNetflixHousehold, extractHouseholdLink };
+module.exports = {
+  getAuthUrl, handleCallback, pollGmailAccount,
+  isNetflixEmail, isNetflixOTP, extractOTP,
+  isNetflixNewDevice, extractPasswordResetLink,
+  isNetflixHousehold, extractHouseholdLink,
+};

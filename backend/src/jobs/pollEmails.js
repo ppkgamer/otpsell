@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const { pollGmailAccount } = require('../services/gmail.service');
+const { pollHotmailAccount } = require('../services/hotmail.service');
 
 const prisma = new PrismaClient();
 
@@ -13,7 +14,8 @@ async function runPoll() {
 
   for (const account of accounts) {
     try {
-      const otps = await pollGmailAccount(account);
+      const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
+      const otps = await pollFn(account);
       if (otps.length > 0) {
         await prisma.otp.createMany({ data: otps, skipDuplicates: true });
         console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);

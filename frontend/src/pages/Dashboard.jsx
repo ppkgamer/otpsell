@@ -31,13 +31,22 @@ export default function Dashboard() {
       localStorage.setItem('user', JSON.stringify(res.data))
     }).catch(() => {})
 
-    const gmailStatus = searchParams.get('gmail')
+    const gmailStatus   = searchParams.get('gmail')
+    const hotmailStatus = searchParams.get('hotmail')
     if (gmailStatus === 'connected') {
       const email = searchParams.get('email')
       showToast('success', t('toast_gmail_connected').replace('{email}', decodeURIComponent(email)))
       setActiveTab('gmail')
       setSearchParams({})
     } else if (gmailStatus === 'error') {
+      showToast('error', t('toast_gmail_error'))
+      setSearchParams({})
+    } else if (hotmailStatus === 'connected') {
+      const email = searchParams.get('email')
+      showToast('success', t('toast_gmail_connected').replace('{email}', decodeURIComponent(email)))
+      setActiveTab('gmail')
+      setSearchParams({})
+    } else if (hotmailStatus === 'error') {
       showToast('error', t('toast_gmail_error'))
       setSearchParams({})
     }

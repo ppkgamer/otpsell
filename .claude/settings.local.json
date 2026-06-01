@@ -19,7 +19,14 @@
       "PowerShell(Get-Process *)",
       "Bash(node test-household.js)",
       "Bash(python3 -c ' *)",
-      "Bash(node send-test-netflix.js)"
+      "Bash(node send-test-netflix.js)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npx vercel *)",
+      "Bash(node -e \"require\\('axios'\\); console.log\\('axios OK'\\)\")"
     ]
   }
 }
