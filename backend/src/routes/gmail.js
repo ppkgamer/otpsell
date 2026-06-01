@@ -8,7 +8,7 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /api/gmail/connect — returns OAuth2 URL (เช็ค plan limit ก่อน)
-router.get('/connect', authenticate, requireRole(['USER']), async (req, res) => {
+router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
     const limit = PLANS[user.plan].maxGmails;
