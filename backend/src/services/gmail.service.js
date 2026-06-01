@@ -56,40 +56,57 @@ function isNetflixEmail(sender) {
 }
 
 // เช็คว่าเป็น OTP email จาก Netflix (ทุกภาษา)
+// ใช้ fragment สั้นๆ แทน phrase ยาว + แยก subject/body check เพื่อความยืดหยุ่น
 function isNetflixOTP(subject, body) {
-  const text = ((subject || '') + ' ' + body).toLowerCase();
-  const keywords = [
+  const sub  = (subject || '').toLowerCase();
+  const bod  = (body    || '').toLowerCase();
+
+  // Fragment keywords — ครอบคลุมทุกภาษา ไม่ต้องตรงทั้ง phrase
+  const fragments = [
     // English
-    'sign-in code', 'signin code', 'verification code', 'one-time',
-    'your code is', 'access code', 'login code', 'your netflix',
+    'otp', 'pin', 'passcode', 'one-time', 'sign-in code', 'signin code',
+    'login code', 'access code', 'verify', 'verification',
     // Thai
-    'รหัสการลงชื่อ', 'รหัส netflix', 'รหัสของคุณ',
+    'รหัส',
     // Japanese
-    'サインインコード', 'コードは', '確認コード',
-    // Chinese
-    '验证码', '登录码', '您的代码',
+    'コード', '確認', '認証', 'ワンタイム',
+    // Chinese (Simplified + Traditional)
+    '验证', '驗證', '动态密码', '授权码',
     // Korean
-    '로그인 코드', '인증코드', '확인 코드',
-    // Spanish
-    'código de', 'tu código',
+    '코드', '인증', '확인',
+    // Spanish / Portuguese
+    'código', 'codigo', 'verificar', 'verificação', 'verificacion',
     // French
-    'code de connexion', 'code de vérification', 'votre code',
+    'vérif', 'connexion',
     // German
-    'anmeldecode', 'bestätigungscode', 'ihr code',
-    // Portuguese
-    'código de acesso', 'seu código',
+    'bestätigung', 'anmeld',
     // Italian
-    'codice di accesso', 'il tuo codice',
+    'codice', 'verifica',
     // Dutch
-    'inlogcode', 'verificatiecode', 'jouw code',
+    'verificat',
     // Polish
-    'kod logowania', 'kod weryfikacyjny',
+    'kod',
     // Turkish
-    'giriş kodu', 'doğrulama kodu',
+    'doğrulama', 'giriş kodu',
     // Arabic
-    'رمز', 'كود',
+    'رمز', 'كود', 'تحقق',
+    // Russian
+    'код', 'подтвер',
+    // Vietnamese
+    'mã xác', 'xác nhận',
+    // Indonesian / Malay
+    'kode', 'verifikasi',
+    // Hindi
+    'कोड',
   ];
-  return keywords.some(kw => text.includes(kw));
+
+  const matchSub  = fragments.some(f => sub.includes(f));
+  const matchBod  = fragments.some(f => bod.includes(f));
+  const hasDigits = /\b\d{4,8}\b/.test(bod);
+
+  // subject มี keyword → เชื่อเลย
+  // body มี keyword + มีตัวเลข 4-8 หลัก → โอกาสสูงว่าเป็น OTP จริง
+  return matchSub || (matchBod && hasDigits);
 }
 
 function extractOTP(text) {
