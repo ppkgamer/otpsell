@@ -38,7 +38,10 @@ export default function SubUsers() {
   const [busy, setBusy] = useState({})
   const [selectValues, setSelectValues] = useState({})
   const [dialog, setDialog] = useState(null)
+  const [expandedGmails, setExpandedGmails] = useState({})
   const { t, lang } = useLang()
+
+  const toggleGmailList = (suId) => setExpandedGmails(p => ({ ...p, [suId]: !p[suId] }))
 
   const PLAN_STYLE = { FREE: 'bg-slate-500/20 text-slate-400', BASIC: 'bg-blue-500/20 text-blue-400', PRO: 'bg-purple-500/20 text-purple-400' }
 
@@ -174,12 +177,22 @@ export default function SubUsers() {
 
                 {/* Assigned Gmails */}
                 <div className="mb-3">
-                  <div className="text-xs text-slate-500 font-medium mb-2">
-                    {t('sub_gmail_label')} ({su.assignedGmails.length})
-                  </div>
+                  <button
+                    onClick={() => su.assignedGmails.length > 0 && toggleGmailList(su.id)}
+                    className={`flex items-center justify-between w-full text-left mb-2 group ${su.assignedGmails.length > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <span className="text-xs text-slate-500 font-medium">
+                      {t('sub_gmail_label')} ({su.assignedGmails.length})
+                    </span>
+                    {su.assignedGmails.length > 0 && (
+                      <span className={`text-xs text-slate-500 group-hover:text-slate-400 transition-transform duration-200 ${expandedGmails[su.id] ? 'rotate-180' : ''} inline-block`}>
+                        ▼
+                      </span>
+                    )}
+                  </button>
                   {su.assignedGmails.length === 0 ? (
                     <div className="text-xs text-slate-700 italic py-1">{t('sub_gmail_none')}</div>
-                  ) : (
+                  ) : expandedGmails[su.id] ? (
                     <div className="space-y-1.5">
                       {su.assignedGmails.map(a => (
                         <div key={a.gmailAccount.id}
@@ -210,6 +223,22 @@ export default function SubUsers() {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => toggleGmailList(su.id)}
+                      className="flex flex-wrap gap-1.5 cursor-pointer"
+                    >
+                      {su.assignedGmails.slice(0, 3).map(a => (
+                        <span key={a.gmailAccount.id} className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1 font-mono">
+                          {a.gmailAccount.email}
+                        </span>
+                      ))}
+                      {su.assignedGmails.length > 3 && (
+                        <span className="text-xs text-slate-500 bg-slate-500/10 border border-slate-500/20 rounded-lg px-2 py-1">
+                          +{su.assignedGmails.length - 3} {lang === 'th' ? 'อีเมล' : 'more'}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
