@@ -92,14 +92,18 @@ export default function SubUsers() {
     : subUsers
 
   const getAvailable = su => {
-    // Gmail ที่ assign ให้ sub-user อื่นแล้ว (ห้ามซ้ำ)
+    // นับเฉพาะ non-admin-managed ที่ assign ให้ sub-user อื่นแล้ว
     const assignedToOthers = new Set(
       subUsers
         .filter(other => other.id !== su.id)
-        .flatMap(other => other.assignedGmails.map(a => a.gmailAccount.id))
+        .flatMap(other => other.assignedGmails
+          .filter(a => !a.gmailAccount.isAdminManaged)
+          .map(a => a.gmailAccount.id))
     )
-    // Gmail ที่ assign ให้ sub-user นี้แล้ว
-    const myIds = new Set(su.assignedGmails.map(a => a.gmailAccount.id))
+    // Gmail ที่ assign ให้ sub-user นี้แล้ว (เฉพาะ visible)
+    const myIds = new Set(su.assignedGmails
+      .filter(a => !a.gmailAccount.isAdminManaged)
+      .map(a => a.gmailAccount.id))
     return gmailAccounts.filter(g => !assignedToOthers.has(g.id) && !myIds.has(g.id))
   }
 
@@ -183,6 +187,8 @@ export default function SubUsers() {
         <div className="space-y-4">
           {filtered.map(su => {
             const available = getAvailable(su)
+            // ซ่อน admin-managed emails จาก user
+            const visibleAssigned = su.assignedGmails.filter(a => !a.gmailAccount.isAdminManaged)
             return (
               <div key={su.id} className={`card-dark p-4 sm:p-5 ${!su.isActive ? 'opacity-50' : ''}`}>
                 {/* Sub-user header */}
@@ -221,26 +227,26 @@ export default function SubUsers() {
                   <p className="text-xs text-slate-600 mt-1.5">{t('sub_code_hint')}</p>
                 </div>
 
-                {/* Assigned Gmails */}
+                {/* Assigned Gmails — แสดงเฉพาะที่ไม่ใช่ admin-managed */}
                 <div className="mb-3">
                   <button
-                    onClick={() => su.assignedGmails.length > 0 && toggleGmailList(su.id)}
-                    className={`flex items-center justify-between w-full text-left mb-2 group ${su.assignedGmails.length > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+                    onClick={() => visibleAssigned.length > 0 && toggleGmailList(su.id)}
+                    className={`flex items-center justify-between w-full text-left mb-2 group ${visibleAssigned.length > 0 ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <span className="text-xs text-slate-500 font-medium">
-                      {t('sub_gmail_label')} ({su.assignedGmails.length})
+                      {t('sub_gmail_label')} ({visibleAssigned.length})
                     </span>
-                    {su.assignedGmails.length > 0 && (
+                    {visibleAssigned.length > 0 && (
                       <span className={`text-xs text-slate-500 group-hover:text-slate-400 transition-transform duration-200 ${expandedGmails[su.id] ? 'rotate-180' : ''} inline-block`}>
                         ▼
                       </span>
                     )}
                   </button>
-                  {su.assignedGmails.length === 0 ? (
+                  {visibleAssigned.length === 0 ? (
                     <div className="text-xs text-slate-700 italic py-1">{t('sub_gmail_none')}</div>
                   ) : expandedGmails[su.id] ? (
                     <div className="space-y-1.5">
-                      {su.assignedGmails.map(a => (
+                      {visibleAssigned.map(a => (
                         <div key={a.gmailAccount.id}
                           className="flex items-center justify-between gap-3 bg-emerald-500/8 border border-emerald-500/20 rounded-xl px-3 py-2.5">
                           <div className="flex items-center gap-2 min-w-0">
@@ -271,18 +277,15 @@ export default function SubUsers() {
                       ))}
                     </div>
                   ) : (
-                    <div
-                      onClick={() => toggleGmailList(su.id)}
-                      className="flex flex-wrap gap-1.5 cursor-pointer"
-                    >
-                      {su.assignedGmails.slice(0, 3).map(a => (
+                    <div onClick={() => toggleGmailList(su.id)} className="flex flex-wrap gap-1.5 cursor-pointer">
+                      {visibleAssigned.slice(0, 3).map(a => (
                         <span key={a.gmailAccount.id} className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1 font-mono">
                           {a.gmailAccount.email}
                         </span>
                       ))}
-                      {su.assignedGmails.length > 3 && (
+                      {visibleAssigned.length > 3 && (
                         <span className="text-xs text-slate-500 bg-slate-500/10 border border-slate-500/20 rounded-lg px-2 py-1">
-                          +{su.assignedGmails.length - 3} {lang === 'th' ? 'อีเมล' : 'more'}
+                          +{visibleAssigned.length - 3} {lang === 'th' ? 'อีเมล' : 'more'}
                         </span>
                       )}
                     </div>

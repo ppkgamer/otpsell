@@ -154,7 +154,7 @@ router.get('/subusers', authenticate, requireRole(['USER']), async (req, res) =>
       where: { parentId: req.userId, role: 'SUBUSER' },
       select: {
         id: true, username: true, code: true, isActive: true, createdAt: true,
-        assignedGmails: { include: { gmailAccount: { select: { id: true, email: true } } } },
+        assignedGmails: { include: { gmailAccount: { select: { id: true, email: true, isAdminManaged: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -228,6 +228,9 @@ router.delete('/subuser/:subUserId/assign/:gmailAccountId', authenticate, requir
     const { subUserId, gmailAccountId } = req.params;
     const subUser = await prisma.user.findFirst({ where: { id: subUserId, parentId: req.userId } });
     if (!subUser) return res.status(404).json({ error: 'Sub-user not found' });
+    // ป้องกันไม่ให้ user ลบ admin-managed account ออก
+    const gmail = await prisma.gmailAccount.findUnique({ where: { id: gmailAccountId } });
+    if (gmail?.isAdminManaged) return res.status(403).json({ error: 'Cannot remove admin-managed account' });
     await prisma.subUserGmail.deleteMany({ where: { subUserId, gmailAccountId } });
     res.json({ success: true });
   } catch (err) {
