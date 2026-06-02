@@ -57,16 +57,30 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/otp/feed?apikey=xxx&since=timestamp — server-to-server feed (ไม่ต้องการ JWT)
+// GET /api/otp/feed?apikey=xxx&since=ms&subuserid=xxx — server-to-server feed
 router.get('/feed', async (req, res) => {
-  const { apikey, since, limit = '100' } = req.query;
+  const { apikey, since, limit = '100', subuserid } = req.query;
   if (!process.env.OTP_FEED_API_KEY || apikey !== process.env.OTP_FEED_API_KEY) {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   try {
-    const where = since
-      ? { receivedAt: { gt: new Date(parseInt(since)) } }
-      : {};
+    let gmailIds;
+
+    if (subuserid) {
+      // กรองเฉพาะ Gmail ที่ assign ให้ sub-user นี้
+      const assignments = await prisma.subUserGmail.findMany({
+        where: { subUserId: subuserid },
+        select: { gmailAccountId: true },
+      });
+      if (assignments.length === 0) return res.json([]);
+      gmailIds = assignments.map(a => a.gmailAccountId);
+    }
+
+    const where = {
+      ...(gmailIds && { gmailAccountId: { in: gmailIds } }),
+      ...(since && { receivedAt: { gt: new Date(parseInt(since)) } }),
+    };
+
     const otps = await prisma.otp.findMany({
       where,
       include: { gmailAccount: { select: { email: true, provider: true } } },
