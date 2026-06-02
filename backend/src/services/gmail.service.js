@@ -162,6 +162,96 @@ function extractOTP(text) {
   return null;
 }
 
+// ── Netflix Temporary Access Code detection ──────────────────
+// อีเมลประเภทนี้ไม่มีตัวเลข OTP ในเนื้อหา แต่มีปุ่ม "รับรหัส" เป็น link
+function isNetflixTempCode(subject) {
+  const sub = (subject || '').toLowerCase();
+  const keywords = [
+    // Thai
+    'ชั่วคราว',
+    // English
+    'temporary access', 'temp access', 'travel access', 'temporary code',
+    'get a code', 'access code for',
+    // Japanese
+    '一時アクセス', '一時的なコード', '一時コード',
+    // Korean
+    '임시 액세스', '임시 코드', '코드 받기',
+    // Spanish
+    'acceso temporal', 'código temporal',
+    // French
+    'accès temporaire', 'code temporaire',
+    // German
+    'temporärer zugang', 'temporärer code',
+    // Portuguese
+    'acesso temporário', 'código temporário',
+    // Italian
+    'accesso temporaneo', 'codice temporaneo',
+    // Dutch
+    'tijdelijke toegang', 'tijdelijke code',
+    // Polish
+    'tymczasowy kod', 'tymczasowy dostęp',
+    // Turkish
+    'geçici erişim', 'geçici kod',
+    // Arabic
+    'الوصول المؤقت', 'رمز مؤقت',
+    // Russian
+    'временный доступ', 'временный код',
+  ];
+  return keywords.some(kw => sub.includes(kw));
+}
+
+function extractTempCodeLink(html) {
+  const ctaTexts = [
+    // Thai
+    'รับรหัส',
+    // English
+    'get code', 'get my code', 'get your code', 'access netflix', 'temporary access',
+    // Japanese
+    'コードを取得', 'コードを受け取る', '一時コードを取得',
+    // Korean
+    '코드 받기', '코드 가져오기',
+    // Spanish / Portuguese
+    'obtener código', 'obter código', 'acceso temporal',
+    // French
+    'obtenir le code', 'obtenir mon code',
+    // German
+    'code abrufen', 'code erhalten',
+    // Italian
+    'ottieni il codice',
+    // Dutch
+    'code ophalen',
+    // Polish
+    'pobierz kod',
+    // Turkish
+    'kodu al',
+  ];
+
+  for (const pattern of ctaTexts) {
+    const before = new RegExp(`href="([^"]{20,})"[^>]*>(?:[^<]*<[^>]*>){0,6}[^<]*(?:${pattern})`, 'is');
+    const mB = html.match(before);
+    if (mB?.[1] && !mB[1].includes('unsubscribe') && !mB[1].includes('help')) {
+      return mB[1].replace(/&amp;/g, '&');
+    }
+    const after = new RegExp(`(?:${pattern})[^<]*(?:<[^>]*>){0,5}[^<]*<a[^>]+href="([^"]{20,})"`, 'is');
+    const mA = html.match(after);
+    if (mA?.[1] && !mA[1].includes('unsubscribe')) {
+      return mA[1].replace(/&amp;/g, '&');
+    }
+  }
+
+  // Fallback: Netflix URL ที่มี travel/temp/access/get-code
+  const allHrefs = [...html.matchAll(/href="([^"]+)"/gi)].map(m => m[1].replace(/&amp;/g, '&'));
+  for (const href of allHrefs) {
+    if (href.length > 40 &&
+        /netflix\.com.*(travel|temp|access|get.?code|tac)/i.test(href) &&
+        !href.includes('unsubscribe') && !href.includes('help') && !href.includes('privacy')) {
+      return href;
+    }
+  }
+
+  return null;
+}
+
 // ── Netflix New Device / Password Reset detection ────────────
 function isNetflixNewDevice(subject) {
   const sub = (subject || '').toLowerCase();
@@ -451,6 +541,23 @@ async function pollGmailAccount(gmailAccount) {
         });
         console.log(`[poll] Netflix household link found in ${gmailAccount.email}`);
       }
+    // Netflix Temporary Access Code → ดึง link จากปุ่ม "รับรหัส"
+    // ต้องเช็คก่อน isNetflixOTP เพราะ subject มี "รหัส" ทำให้ผ่าน OTP check ด้วย
+    } else if (isNetflixTempCode(subject)) {
+      const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
+      const link = extractTempCodeLink(htmlBody || body);
+      if (link) {
+        newOtps.push({
+          type: 'temp_code_link',
+          code: link,
+          sender,
+          subject,
+          messageId: msg.id,
+          gmailAccountId: gmailAccount.id,
+          receivedAt,
+        });
+        console.log(`[poll] Netflix temp code link found in ${gmailAccount.email}`);
+      }
     } else if (isNetflixOTP(subject, body)) {
       // เฉพาะ Netflix OTP email จริงๆ (มี keyword รหัส/code/sign-in) เท่านั้น
       const code = extractOTP((subject ?? '') + ' ' + body);
@@ -481,5 +588,6 @@ module.exports = {
   getAuthUrl, handleCallback, pollGmailAccount,
   isNetflixEmail, isNetflixOTP, extractOTP,
   isNetflixNewDevice, extractPasswordResetLink,
+  isNetflixTempCode, extractTempCodeLink,
   isNetflixHousehold, extractHouseholdLink,
 };

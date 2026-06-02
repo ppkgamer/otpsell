@@ -4,6 +4,7 @@ const {
   isNetflixOTP, extractOTP,
   isNetflixHousehold, extractHouseholdLink,
   isNetflixNewDevice, extractPasswordResetLink,
+  isNetflixTempCode, extractTempCodeLink,
 } = require('./gmail.service');
 
 const prisma = new PrismaClient();
@@ -166,6 +167,12 @@ async function pollHotmailAccount(account) {
       if (link) {
         newOtps.push({ type: 'household_link', code: link, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix household link in ${account.email}`);
+      }
+    } else if (isNetflixTempCode(subject)) {
+      const link = extractTempCodeLink(body);
+      if (link) {
+        newOtps.push({ type: 'temp_code_link', code: link, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        console.log(`[hotmail-poll] Netflix temp code link in ${account.email}`);
       }
     } else if (isNetflixOTP(subject, body)) {
       const code = extractOTP(subject + ' ' + body);

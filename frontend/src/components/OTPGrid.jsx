@@ -34,6 +34,68 @@ function formatTimeAgo(receivedAt, justNowLabel) {
   return `${Math.floor(m / 60)}h ago`
 }
 
+// ── Temp Code Card (รับรหัสชั่วคราว) ─────────────────────────
+function TempCodeCard({ otp }) {
+  const { lang } = useLang()
+  const status    = getStatus(otp.receivedAt)
+  const isExpired = status === 'expired'
+  const timeAgo   = formatTimeAgo(otp.receivedAt, lang === 'th' ? 'เพิ่งได้รับ' : 'Just now')
+  const label     = lang === 'th' ? 'รหัสเข้าใช้งานชั่วคราว' : 'Temporary Access Code'
+  const desc      = lang === 'th' ? 'กดปุ่มด้านล่างเพื่อรับรหัสสำหรับเข้าใช้งานชั่วคราว' : 'Click the button below to get your temporary access code'
+  const btnText   = lang === 'th' ? '🔑 รับรหัส' : '🔑 Get Code'
+  const expText   = lang === 'th' ? 'ลิงก์อาจหมดอายุแล้ว (15 นาที)' : 'Link may have expired (15 min)'
+
+  return (
+    <div className="relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300"
+      style={{
+        border:     isExpired ? '1px solid rgba(100,100,120,0.25)' : '1px solid rgba(168,85,247,0.35)',
+        background: isExpired ? 'rgba(20,20,30,0.6)' : 'rgba(25,5,50,0.7)',
+        boxShadow:  isExpired ? 'none' : '0 0 20px rgba(168,85,247,0.08)',
+      }}>
+
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-[#E50914] rounded flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-black" style={{ fontSize: 9 }}>N</span>
+          </div>
+          <span className={`text-xs font-bold tracking-wide ${isExpired ? 'text-slate-500' : 'text-purple-400'}`}>
+            {label}
+          </span>
+        </div>
+        <span className="text-xs text-slate-600 font-mono">{timeAgo}</span>
+      </div>
+
+      <div className="mx-4 mt-3 flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-xl px-3 py-2">
+        <span className="text-purple-400 text-sm">🎫</span>
+        <span className="text-xs text-purple-300 font-medium">{desc}</span>
+      </div>
+
+      {isExpired && (
+        <div className="mx-4 mt-2 flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+          <span className="text-orange-400">⏱</span>
+          <span className="text-xs text-orange-400">{expText}</span>
+        </div>
+      )}
+
+      <div className="px-4 pt-3 pb-3 space-y-0.5">
+        {otp.subject && <div className="text-xs text-slate-500 truncate">{otp.subject}</div>}
+        <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+      </div>
+
+      <div className="px-4 pb-4 mt-auto">
+        <a href={otp.code} target="_blank" rel="noopener noreferrer"
+          className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            isExpired
+              ? 'bg-white/5 text-slate-500 border border-white/10 hover:bg-white/10'
+              : 'bg-purple-600/80 hover:bg-purple-500 text-white'
+          }`}>
+          {btnText}
+        </a>
+      </div>
+    </div>
+  )
+}
+
 // ── Password Reset Card ───────────────────────────────────────
 function PasswordResetCard({ otp, tick }) {
   const { lang } = useLang()
@@ -386,8 +448,9 @@ export default function OTPGrid() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {otps.map(otp =>
-            otp.type === 'household_link'    ? <HouseholdCard      key={otp.id} otp={otp} tick={tick} /> :
+            otp.type === 'household_link'     ? <HouseholdCard    key={otp.id} otp={otp} tick={tick} /> :
             otp.type === 'password_reset_link' ? <PasswordResetCard key={otp.id} otp={otp} tick={tick} /> :
+            otp.type === 'temp_code_link'      ? <TempCodeCard      key={otp.id} otp={otp} /> :
             <OTPCard key={otp.id} otp={otp} tick={tick} />
           )}
         </div>
