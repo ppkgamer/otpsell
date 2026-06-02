@@ -176,9 +176,21 @@ function OTPCard({ otp, tick }) {
   const barColor = progress > 60 ? '#22c55e' : progress > 30 ? '#eab308' : '#ef4444'
 
   async function copy() {
-    await navigator.clipboard.writeText(otp.code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(otp.code)
+      } else {
+        const el = document.createElement('textarea')
+        el.value = otp.code
+        el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;'
+        document.body.appendChild(el)
+        el.focus(); el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* silent */ }
   }
 
   const cardStyle = {
