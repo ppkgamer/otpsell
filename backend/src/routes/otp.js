@@ -57,6 +57,28 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/otp/feed?apikey=xxx&since=timestamp — server-to-server feed (ไม่ต้องการ JWT)
+router.get('/feed', async (req, res) => {
+  const { apikey, since, limit = '100' } = req.query;
+  if (!process.env.OTP_FEED_API_KEY || apikey !== process.env.OTP_FEED_API_KEY) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  try {
+    const where = since
+      ? { receivedAt: { gt: new Date(parseInt(since)) } }
+      : {};
+    const otps = await prisma.otp.findMany({
+      where,
+      include: { gmailAccount: { select: { email: true, provider: true } } },
+      orderBy: { receivedAt: 'desc' },
+      take: Math.min(parseInt(limit), 500),
+    });
+    res.json(otps);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/otp/latest — 5 OTP ล่าสุดต่อ Gmail (grouped)
 router.get('/latest', authenticate, async (req, res) => {
   try {
