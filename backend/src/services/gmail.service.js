@@ -171,19 +171,23 @@ function isNetflixTempCode(subject) {
     'ชั่วคราว',
     // English
     'temporary access', 'temp access', 'travel access', 'temporary code',
-    'get a code', 'access code for',
+    'get a code', 'access code for', 'a temporary',
     // Japanese
-    '一時アクセス', '一時的なコード', '一時コード',
+    '一時アクセス', '一時的なコード', '一時コード', '一時的アクセス',
     // Korean
-    '임시 액세스', '임시 코드', '코드 받기',
+    '임시 액세스', '임시 코드', '임시 접속',
+    // Chinese (Simplified)
+    '临时访问', '临时代码', '暂时访问', '临时密码',
+    // Chinese (Traditional)
+    '臨時訪問', '臨時代碼', '暫時訪問', '臨時密碼',
     // Spanish
-    'acceso temporal', 'código temporal',
+    'acceso temporal', 'código temporal', 'acceso provisorio',
     // French
-    'accès temporaire', 'code temporaire',
+    'accès temporaire', 'code temporaire', 'accès provisoire',
     // German
-    'temporärer zugang', 'temporärer code',
+    'temporärer zugang', 'temporärer code', 'vorübergehender zugang',
     // Portuguese
-    'acesso temporário', 'código temporário',
+    'acesso temporário', 'código temporário', 'acesso provisório',
     // Italian
     'accesso temporaneo', 'codice temporaneo',
     // Dutch
@@ -193,58 +197,120 @@ function isNetflixTempCode(subject) {
     // Turkish
     'geçici erişim', 'geçici kod',
     // Arabic
-    'الوصول المؤقت', 'رمز مؤقت',
+    'الوصول المؤقت', 'رمز مؤقت', 'وصول مؤقت',
     // Russian
-    'временный доступ', 'временный код',
+    'временный доступ', 'временный код', 'временный пароль',
+    // Vietnamese
+    'truy cập tạm thời', 'mã tạm thời', 'tạm thời',
+    // Indonesian / Malay
+    'akses sementara', 'kode sementara', 'akses sambungan',
+    // Hindi
+    'अस्थायी', 'अस्थायी कोड',
+    // Swedish
+    'tillfällig åtkomst', 'tillfällig kod',
+    // Danish / Norwegian
+    'midlertidig adgang', 'midlertidig tilgang', 'midlertidig kode',
+    // Finnish
+    'tilapäinen koodi', 'väliaikainen koodi',
+    // Czech
+    'dočasný přístup', 'dočasný kód',
+    // Hungarian
+    'ideiglenes hozzáférés', 'ideiglenes kód',
+    // Romanian
+    'acces temporar', 'cod temporar',
+    // Greek
+    'προσωρινή πρόσβαση', 'προσωρινός κωδικός',
+    // Hebrew
+    'גישה זמנית', 'קוד זמני',
   ];
   return keywords.some(kw => sub.includes(kw));
 }
 
 function extractTempCodeLink(html) {
+  const SKIP = /unsubscribe|help|privacy|faq|support|terms|cookie/i;
+
+  // ── Priority 1: Netflix URL pattern (ภาษา-agnostic ที่สุด) ──
+  // Netflix ใช้ URL format เดียวกันทุกภาษา
+  const allHrefs = [...html.matchAll(/href="([^"]+)"/gi)].map(m => m[1].replace(/&amp;/g, '&'));
+  for (const href of allHrefs) {
+    if (href.length > 40 && !SKIP.test(href) &&
+        /netflix\.com.*(travel[\-_]?access|\/tac[?/]|get[\-_]?code|temporaryaccess|temp[\-_]?access|accs?code)/i.test(href)) {
+      return href;
+    }
+  }
+
+  // ── Priority 2: CTA button text matching (ครอบคลุมทุกภาษา) ──
   const ctaTexts = [
     // Thai
-    'รับรหัส',
+    'รับรหัส', 'รับรหัสชั่วคราว',
     // English
-    'get code', 'get my code', 'get your code', 'access netflix', 'temporary access',
+    'get code', 'get my code', 'get your code', 'get a code',
+    'access netflix', 'temporary access', 'get temporary',
     // Japanese
-    'コードを取得', 'コードを受け取る', '一時コードを取得',
+    'コードを取得', 'コードを受け取る', '一時コードを取得', 'コードを入手',
     // Korean
-    '코드 받기', '코드 가져오기',
-    // Spanish / Portuguese
-    'obtener código', 'obter código', 'acceso temporal',
+    '코드 받기', '코드 가져오기', '임시 코드 받기',
+    // Chinese (Simplified)
+    '获取代码', '获取验证码', '获取临时码', '获取临时密码', '获取授权码',
+    // Chinese (Traditional)
+    '取得驗證碼', '取得代碼', '取得臨時碼',
+    // Spanish
+    'obtener código', 'obtener mi código', 'acceso temporal',
+    // Portuguese
+    'obter código', 'obter meu código', 'acesso temporário',
     // French
-    'obtenir le code', 'obtenir mon code',
+    'obtenir le code', 'obtenir mon code', 'accès temporaire',
     // German
-    'code abrufen', 'code erhalten',
+    'code abrufen', 'code erhalten', 'code anfordern',
     // Italian
-    'ottieni il codice',
+    'ottieni il codice', 'ottieni codice',
     // Dutch
-    'code ophalen',
+    'code ophalen', 'code ontvangen',
     // Polish
-    'pobierz kod',
+    'pobierz kod', 'uzyskaj kod',
     // Turkish
-    'kodu al',
+    'kodu al', 'kodu alın',
+    // Arabic
+    'احصل على الرمز', 'الحصول على الرمز', 'احصل على الكود',
+    // Russian
+    'получить код', 'получить временный код',
+    // Vietnamese
+    'lấy mã', 'nhận mã', 'lấy mã tạm thời',
+    // Indonesian / Malay
+    'dapatkan kode', 'ambil kode', 'dapatkan kod',
+    // Hindi
+    'कोड प्राप्त करें', 'कोड लें',
+    // Swedish
+    'hämta kod', 'få koden', 'hämta koden',
+    // Danish / Norwegian
+    'hent kode', 'hent koden',
+    // Finnish
+    'hae koodi', 'nouda koodi',
+    // Czech
+    'získat kód', 'zobrazit kód',
+    // Hungarian
+    'kód kérése', 'kód lekérése',
+    // Romanian
+    'obțineți codul', 'obține codul',
+    // Greek
+    'λήψη κωδικού', 'λάβετε κωδικό',
+    // Hebrew
+    'קבל קוד', 'קבל את הקוד',
   ];
 
   for (const pattern of ctaTexts) {
     const before = new RegExp(`href="([^"]{20,})"[^>]*>(?:[^<]*<[^>]*>){0,6}[^<]*(?:${pattern})`, 'is');
     const mB = html.match(before);
-    if (mB?.[1] && !mB[1].includes('unsubscribe') && !mB[1].includes('help')) {
-      return mB[1].replace(/&amp;/g, '&');
-    }
+    if (mB?.[1] && !SKIP.test(mB[1])) return mB[1].replace(/&amp;/g, '&');
+
     const after = new RegExp(`(?:${pattern})[^<]*(?:<[^>]*>){0,5}[^<]*<a[^>]+href="([^"]{20,})"`, 'is');
     const mA = html.match(after);
-    if (mA?.[1] && !mA[1].includes('unsubscribe')) {
-      return mA[1].replace(/&amp;/g, '&');
-    }
+    if (mA?.[1] && !SKIP.test(mA[1])) return mA[1].replace(/&amp;/g, '&');
   }
 
-  // Fallback: Netflix URL ที่มี travel/temp/access/get-code
-  const allHrefs = [...html.matchAll(/href="([^"]+)"/gi)].map(m => m[1].replace(/&amp;/g, '&'));
+  // ── Priority 3: Netflix long URL fallback ──
   for (const href of allHrefs) {
-    if (href.length > 40 &&
-        /netflix\.com.*(travel|temp|access|get.?code|tac)/i.test(href) &&
-        !href.includes('unsubscribe') && !href.includes('help') && !href.includes('privacy')) {
+    if (href.length > 60 && href.includes('netflix.com') && !SKIP.test(href)) {
       return href;
     }
   }
