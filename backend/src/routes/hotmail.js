@@ -37,23 +37,25 @@ router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req,
 
 // GET /api/hotmail/callback
 router.get('/callback', async (req, res) => {
-  const { code, state: userId, error, error_description } = req.query;
+  const { code, state, error, error_description } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-  // Microsoft ส่ง error กลับมา (เช่น user กด Cancel หรือ consent ไม่ผ่าน)
   if (error) {
     console.error('[hotmail] Microsoft error:', error, error_description);
     const reason = encodeURIComponent(error_description || error);
     return res.redirect(`${frontendUrl}/dashboard?hotmail=error&reason=${reason}`);
   }
 
-  if (!code || !userId) {
+  if (!code || !state) {
     console.error('[hotmail] Missing params — query:', JSON.stringify(req.query));
     return res.redirect(`${frontendUrl}/dashboard?hotmail=error&reason=missing_params`);
   }
 
+  const isAdminManaged = state.startsWith('admin:');
+  const userId = isAdminManaged ? state.slice(6) : state;
+
   try {
-    const email = await handleCallback(code, userId);
+    const email = await handleCallback(code, userId, isAdminManaged);
     res.redirect(`${frontendUrl}/dashboard?hotmail=connected&email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error('[hotmail] OAuth callback error:', err.message, err.response?.data);

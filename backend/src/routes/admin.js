@@ -24,6 +24,40 @@ router.get('/users', authenticate, requireRole(['ADMIN']), async (req, res) => {
   }
 });
 
+// GET /api/admin/users/:id/gmail/connect — admin เชื่อม Gmail ให้ user (hidden)
+router.get('/users/:id/gmail/connect', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { getAuthUrl } = require('../services/gmail.service');
+    const url = getAuthUrl(`admin:${req.params.id}`);
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/users/:id/hotmail/connect — admin เชื่อม Hotmail ให้ user (hidden)
+router.get('/users/:id/hotmail/connect', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { getAuthUrl } = require('../services/hotmail.service');
+    const url = getAuthUrl(`admin:${req.params.id}`);
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/users/:id/gmail/:gmailId — admin ลบ gmail ของ user
+router.delete('/users/:id/gmail/:gmailId', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const acc = await prisma.gmailAccount.findFirst({ where: { id: req.params.gmailId, userId: req.params.id } });
+    if (!acc) return res.status(404).json({ error: 'Account not found' });
+    await prisma.gmailAccount.delete({ where: { id: req.params.gmailId } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/users/:id — user detail + sub-users
 router.get('/users/:id', authenticate, requireRole(['ADMIN']), async (req, res) => {
   try {
@@ -33,7 +67,7 @@ router.get('/users/:id', authenticate, requireRole(['ADMIN']), async (req, res) 
         id: true, email: true, username: true,
         role: true, plan: true, isActive: true, createdAt: true,
         gmailAccounts: {
-          select: { id: true, email: true, isActive: true, lastPolledAt: true, _count: { select: { otps: true } } },
+          select: { id: true, email: true, provider: true, isAdminManaged: true, isActive: true, lastPolledAt: true, _count: { select: { otps: true } } },
         },
         subUsers: {
           select: {

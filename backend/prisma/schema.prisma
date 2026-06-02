@@ -47,9 +47,10 @@ model GmailAccount {
   user         User           @relation(fields: [userId], references: [id])
   otps         Otp[]
   assignedTo   SubUserGmail[]
-  lastPolledAt DateTime?
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now())
+  lastPolledAt    DateTime?
+  isActive        Boolean        @default(true)
+  isAdminManaged  Boolean        @default(false)
+  createdAt       DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   @@unique([userId, email])

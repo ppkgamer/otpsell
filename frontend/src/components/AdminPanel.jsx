@@ -251,18 +251,49 @@ function UserDetail({ userId, onBack, onRefresh }) {
 
       {/* Gmails */}
       <div className="mb-5">
-        <h3 className="font-semibold text-white mb-3">{t('admin_gmails_label')} ({user.gmailAccounts.length})</h3>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h3 className="font-semibold text-white">{t('admin_gmails_label')} ({user.gmailAccounts.length})</h3>
+          <div className="flex gap-2">
+            <button onClick={async () => {
+              const res = await api.get(`/admin/users/${user.id}/gmail/connect`)
+              window.location.href = res.data.url
+            }} className="text-xs px-3 py-1.5 rounded-lg border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+              + Gmail (hidden)
+            </button>
+            <button onClick={async () => {
+              const res = await api.get(`/admin/users/${user.id}/hotmail/connect`)
+              window.location.href = res.data.url
+            }} className="text-xs px-3 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors">
+              + Hotmail (hidden)
+            </button>
+          </div>
+        </div>
         {user.gmailAccounts.length === 0 ? (
           <p className="text-sm text-slate-600 italic">{t('admin_no_gmail')}</p>
         ) : (
           <div className="space-y-2">
             {user.gmailAccounts.map(g => (
               <div key={g.id} className="card-dark px-4 py-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${g.isActive ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                   <span className="text-sm font-mono text-slate-300 truncate">{g.email}</span>
+                  {g.provider === 'hotmail' && (
+                    <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/25 font-semibold">Hotmail</span>
+                  )}
+                  {g.isAdminManaged && (
+                    <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-400 border border-orange-500/25 font-semibold">Hidden</span>
+                  )}
                 </div>
-                <span className="text-xs text-slate-600 flex-shrink-0">{g._count.otps} OTPs</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-slate-600">{g._count.otps} OTPs</span>
+                  <button onClick={async () => {
+                    if (!confirm(`ลบ ${g.email}?`)) return
+                    await api.delete(`/admin/users/${user.id}/gmail/${g.id}`)
+                    await load()
+                  }} className="text-xs px-2 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+                    {lang === 'th' ? 'ลบ' : 'Del'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

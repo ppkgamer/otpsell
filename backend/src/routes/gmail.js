@@ -26,15 +26,19 @@ router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req,
 
 // GET /api/gmail/callback — Google redirects here after auth
 router.get('/callback', async (req, res) => {
-  const { code, state: userId } = req.query;
+  const { code, state } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-  if (!code || !userId) {
+  if (!code || !state) {
     return res.redirect(`${frontendUrl}/dashboard?gmail=error&reason=missing_params`);
   }
 
+  // state = "admin:{userId}" เมื่อ admin เชื่อมให้ user, หรือ "{userId}" ปกติ
+  const isAdminManaged = state.startsWith('admin:');
+  const userId = isAdminManaged ? state.slice(6) : state;
+
   try {
-    const email = await handleCallback(code, userId);
+    const email = await handleCallback(code, userId, isAdminManaged);
     res.redirect(`${frontendUrl}/dashboard?gmail=connected&email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error('[gmail] OAuth callback error:', err.message);
@@ -42,14 +46,15 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// GET /api/gmail/accounts — list User's own Gmail accounts
+// GET /api/gmail/accounts — list User's own Gmail accounts (ซ่อน admin-managed)
 router.get('/accounts', authenticate, requireRole(['USER']), async (req, res) => {
   try {
     const accounts = await prisma.gmailAccount.findMany({
-      where: { userId: req.userId },
+      where: { userId: req.userId, isAdminManaged: false },
       select: {
         id: true,
         email: true,
+        provider: true,
         isActive: true,
         lastPolledAt: true,
         createdAt: true,

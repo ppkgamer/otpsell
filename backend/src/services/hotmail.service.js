@@ -73,7 +73,7 @@ async function refreshIfNeeded(account, err) {
   return newToken;
 }
 
-async function handleCallback(code, userId) {
+async function handleCallback(code, userId, isAdminManaged = false) {
   const tokens = await getTokens(code);
 
   const res = await axios.get(`${GRAPH_BASE}/me?$select=mail,userPrincipalName`, {
@@ -87,14 +87,16 @@ async function handleCallback(code, userId) {
       accessToken:  tokens.access_token,
       provider:     'hotmail',
       isActive:     true,
+      isAdminManaged,
       ...(tokens.refresh_token && { refreshToken: tokens.refresh_token }),
     },
     create: {
       email,
-      provider:     'hotmail',
-      accessToken:  tokens.access_token,
-      refreshToken: tokens.refresh_token || '',
+      provider:      'hotmail',
+      accessToken:   tokens.access_token,
+      refreshToken:  tokens.refresh_token || '',
       userId,
+      isAdminManaged,
     },
   });
 

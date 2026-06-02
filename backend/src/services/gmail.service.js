@@ -23,7 +23,7 @@ function getAuthUrl(userId) {
   });
 }
 
-async function handleCallback(code, userId) {
+async function handleCallback(code, userId, isAdminManaged = false) {
   const client = createOAuthClient();
   const { tokens } = await client.getToken(code);
 
@@ -38,12 +38,14 @@ async function handleCallback(code, userId) {
       accessToken: tokens.access_token,
       ...(tokens.refresh_token && { refreshToken: tokens.refresh_token }),
       isActive: true,
+      isAdminManaged,
     },
     create: {
       email,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       userId,
+      isAdminManaged,
     },
   });
 
