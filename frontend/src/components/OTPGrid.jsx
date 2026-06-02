@@ -79,7 +79,7 @@ function TempCodeCard({ otp }) {
 
       <div className="px-4 pt-3 pb-3 space-y-0.5">
         {otp.subject && <div className="text-xs text-slate-500 truncate">{otp.subject}</div>}
-        <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+        <div className="text-xs text-slate-400 font-mono truncate">{otp.gmailAccount?.email}</div>
       </div>
 
       <div className="px-4 pb-4 mt-auto">
@@ -143,7 +143,7 @@ function PasswordResetCard({ otp, tick }) {
       <div className="px-4 pt-3 pb-3 space-y-0.5">
         {otp.subject && <div className="text-xs text-slate-500 truncate">{otp.subject}</div>}
         {senderName && <div className="text-xs text-slate-600 truncate">{senderName}</div>}
-        <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+        <div className="text-xs text-slate-400 font-mono truncate">{otp.gmailAccount?.email}</div>
       </div>
 
       <div className="px-4 pb-4 mt-auto">
@@ -229,7 +229,7 @@ function OTPCard({ otp, tick }) {
           />
         </div>
         <div className="flex justify-between items-center mt-1">
-          <span className="text-xs text-slate-700 font-mono">{senderName || otp.gmailAccount?.email}</span>
+          <span className="text-xs text-slate-400 font-mono">{senderName || otp.gmailAccount?.email}</span>
           {countdown && (
             <span className={`text-xs font-mono font-bold ${
               progress > 60 ? 'text-emerald-600' : progress > 30 ? 'text-yellow-600' : 'text-red-500'
@@ -250,7 +250,7 @@ function OTPCard({ otp, tick }) {
             <div className="text-xs text-slate-600 truncate">{otp.subject}</div>
           )}
           {senderName && (
-            <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+            <div className="text-xs text-slate-400 font-mono truncate">{otp.gmailAccount?.email}</div>
           )}
         </div>
       )}
@@ -318,7 +318,7 @@ function HouseholdCard({ otp, tick }) {
       <div className="px-4 pt-4 pb-3 space-y-1">
         {senderName && <div className="text-xs text-slate-500 truncate">{senderName}</div>}
         {otp.subject && <div className="text-xs text-slate-600 truncate">{otp.subject}</div>}
-        <div className="text-xs text-slate-700 font-mono truncate">{otp.gmailAccount?.email}</div>
+        <div className="text-xs text-slate-400 font-mono truncate">{otp.gmailAccount?.email}</div>
       </div>
 
       {/* Progress bar */}
