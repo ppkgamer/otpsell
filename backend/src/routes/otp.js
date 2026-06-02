@@ -93,6 +93,47 @@ router.get('/feed', async (req, res) => {
   }
 });
 
+// GET /api/otp/public?code=YG4324 — public feed ต่อ sub-user (ใช้ code แทน JWT)
+router.get('/public', async (req, res) => {
+  const { code, limit = '50' } = req.query;
+  if (!code) return res.status(400).json({ error: 'code required' });
+
+  try {
+    const subUser = await prisma.user.findUnique({
+      where: { code: code.toUpperCase() },
+      select: { id: true, role: true, isActive: true },
+    });
+    if (!subUser || subUser.role !== 'SUBUSER') return res.status(404).json({ error: 'Invalid code' });
+    if (!subUser.isActive) return res.status(403).json({ error: 'Account disabled' });
+
+    const assignments = await prisma.subUserGmail.findMany({
+      where: { subUserId: subUser.id },
+      select: { gmailAccountId: true },
+    });
+    if (assignments.length === 0) return res.json([]);
+
+    const gmailIds = assignments.map(a => a.gmailAccountId);
+    const otps = await prisma.otp.findMany({
+      where: { gmailAccountId: { in: gmailIds } },
+      include: { gmailAccount: { select: { email: true, provider: true } } },
+      orderBy: { receivedAt: 'desc' },
+      take: Math.min(parseInt(limit), 100),
+    });
+
+    // dedup by messageId
+    const seen = new Set();
+    const deduped = otps.filter(o => {
+      if (seen.has(o.messageId)) return false;
+      seen.add(o.messageId);
+      return true;
+    });
+
+    res.json(deduped);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/otp/latest — 5 OTP ล่าสุดต่อ Gmail (grouped)
 router.get('/latest', authenticate, async (req, res) => {
   try {
