@@ -22,11 +22,13 @@ router.get('/debug', authenticate, async (req, res) => {
 router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
-    const limit = PLANS[user.plan].maxGmails;
-    if (limit !== -1) {
-      const count = await prisma.gmailAccount.count({ where: { userId: req.userId } });
-      if (count >= limit)
-        return res.status(403).json({ error: `Plan ${user.plan} เพิ่มบัญชีได้สูงสุด ${limit} บัญชี` });
+    if (user.role !== 'ADMIN') {
+      const limit = PLANS[user.plan].maxGmails;
+      if (limit !== -1) {
+        const count = await prisma.gmailAccount.count({ where: { userId: req.userId } });
+        if (count >= limit)
+          return res.status(403).json({ error: `Plan ${user.plan} เพิ่มบัญชีได้สูงสุด ${limit} บัญชี` });
+      }
     }
     const url = getAuthUrl(req.userId);
     res.json({ url });
