@@ -574,10 +574,21 @@ async function pollGmailAccount(gmailAccount) {
     const sender = headers.find((h) => h.name === 'From')?.value ?? null;
     const subject = headers.find((h) => h.name === 'Subject')?.value ?? null;
     const dateStr = headers.find((h) => h.name === 'Date')?.value;
+    const toHeader = headers.find((h) => h.name === 'To')?.value ?? null;
 
     const body = getBodyFromPayload(detail.data.payload);
     const receivedAt = dateStr ? new Date(dateStr) : new Date();
-    const toEmail = extractOriginalRecipient(body);
+
+    // Extract original recipient: To header takes priority (Gmail preserves it when forwarding),
+    // fall back to [email] pattern in body/HTML footer for cases where To header = inbox email.
+    const toEmailFromHeader = toHeader
+      ? (toHeader.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/) || [])[1] ?? null
+      : null;
+    const toEmailFromBody = extractOriginalRecipient(body)
+      || extractOriginalRecipient(getHtmlBodyFromPayload(detail.data.payload));
+    const toEmail = (toEmailFromHeader && toEmailFromHeader !== gmailAccount.email)
+      ? toEmailFromHeader
+      : toEmailFromBody;
 
     // ── เช็ค Netflix ก่อนเลย ถ้าไม่ใช่ข้ามทันที ──
     if (!isNetflixEmail(sender)) {

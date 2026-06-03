@@ -154,7 +154,11 @@ async function pollHotmailAccount(account) {
     const subject = msg.subject || '';
     const body    = msg.body?.content || msg.bodyPreview || '';
     const receivedAt = new Date(msg.receivedDateTime);
-    const toEmail = extractOriginalRecipient(body);
+    const toEmailFromHeader = msg.toRecipients?.[0]?.emailAddress?.address ?? null;
+    const toEmailFromBody = extractOriginalRecipient(body);
+    const toEmail = (toEmailFromHeader && toEmailFromHeader !== account.email)
+      ? toEmailFromHeader
+      : toEmailFromBody;
 
     if (!isNetflixSender(sender)) continue;
 
