@@ -72,6 +72,7 @@ model Otp {
   type           String       @default("otp") // "otp" | "household_link"
   code           String
   sender         String?
+  toEmail        String?
   subject        String?
   messageId      String
   gmailAccountId String

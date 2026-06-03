@@ -5,6 +5,7 @@ const {
   isNetflixHousehold, extractHouseholdLink,
   isNetflixNewDevice, extractPasswordResetLink,
   isNetflixTempCode, extractTempCodeLink,
+  extractOriginalRecipient,
 } = require('./gmail.service');
 
 const prisma = new PrismaClient();
@@ -153,32 +154,33 @@ async function pollHotmailAccount(account) {
     const subject = msg.subject || '';
     const body    = msg.body?.content || msg.bodyPreview || '';
     const receivedAt = new Date(msg.receivedDateTime);
+    const toEmail = extractOriginalRecipient(body);
 
     if (!isNetflixSender(sender)) continue;
 
     if (isNetflixNewDevice(subject)) {
       const link = extractPasswordResetLink(body);
       if (link) {
-        newOtps.push({ type: 'password_reset_link', code: link, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        newOtps.push({ type: 'password_reset_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix password reset link in ${account.email}`);
       }
     } else if (isNetflixHousehold(subject, sender)) {
       const link = extractHouseholdLink(body);
       if (link) {
-        newOtps.push({ type: 'household_link', code: link, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        newOtps.push({ type: 'household_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix household link in ${account.email}`);
       }
     } else if (isNetflixTempCode(subject)) {
       const link = extractTempCodeLink(body);
       if (link) {
-        newOtps.push({ type: 'temp_code_link', code: link, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        newOtps.push({ type: 'temp_code_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix temp code link in ${account.email}`);
       }
     } else if (isNetflixOTP(subject, body)) {
       const code = extractOTP(subject + ' ' + body);
       if (code) {
-        newOtps.push({ type: 'otp', code, sender, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
-        console.log(`[hotmail-poll] Netflix OTP ${code} in ${account.email}`);
+        newOtps.push({ type: 'otp', code, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        console.log(`[hotmail-poll] Netflix OTP ${code} (to: ${toEmail ?? 'unknown'}) in ${account.email}`);
       }
     }
   }

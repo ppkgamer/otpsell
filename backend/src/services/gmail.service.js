@@ -162,6 +162,14 @@ function extractOTP(text) {
   return null;
 }
 
+// ── Extract original recipient from forwarded email ───────────
+// Netflix embeds the real recipient in footer: "ข้อความนี้ส่งถึง [email@x.com]"
+function extractOriginalRecipient(text) {
+  if (!text) return null;
+  const match = text.match(/\[([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/);
+  return match ? match[1] : null;
+}
+
 // ── Netflix Temporary Access Code detection ──────────────────
 // อีเมลประเภทนี้ไม่มีตัวเลข OTP ในเนื้อหา แต่มีปุ่ม "รับรหัส" เป็น link
 function isNetflixTempCode(subject) {
@@ -569,6 +577,7 @@ async function pollGmailAccount(gmailAccount) {
 
     const body = getBodyFromPayload(detail.data.payload);
     const receivedAt = dateStr ? new Date(dateStr) : new Date();
+    const toEmail = extractOriginalRecipient(body);
 
     // ── เช็ค Netflix ก่อนเลย ถ้าไม่ใช่ข้ามทันที ──
     if (!isNetflixEmail(sender)) {
@@ -584,6 +593,7 @@ async function pollGmailAccount(gmailAccount) {
           type: 'password_reset_link',
           code: link,
           sender,
+          toEmail,
           subject,
           messageId: msg.id,
           gmailAccountId: gmailAccount.id,
@@ -600,6 +610,7 @@ async function pollGmailAccount(gmailAccount) {
           type: 'household_link',
           code: link,
           sender,
+          toEmail,
           subject,
           messageId: msg.id,
           gmailAccountId: gmailAccount.id,
@@ -617,6 +628,7 @@ async function pollGmailAccount(gmailAccount) {
           type: 'temp_code_link',
           code: link,
           sender,
+          toEmail,
           subject,
           messageId: msg.id,
           gmailAccountId: gmailAccount.id,
@@ -632,12 +644,13 @@ async function pollGmailAccount(gmailAccount) {
           type: 'otp',
           code,
           sender,
+          toEmail,
           subject,
           messageId: msg.id,
           gmailAccountId: gmailAccount.id,
           receivedAt,
         });
-        console.log(`[poll] Netflix OTP found: ${code} in ${gmailAccount.email}`);
+        console.log(`[poll] Netflix OTP found: ${code} (to: ${toEmail ?? 'unknown'}) in ${gmailAccount.email}`);
       }
     }
   }
@@ -656,4 +669,5 @@ module.exports = {
   isNetflixNewDevice, extractPasswordResetLink,
   isNetflixTempCode, extractTempCodeLink,
   isNetflixHousehold, extractHouseholdLink,
+  extractOriginalRecipient,
 };
