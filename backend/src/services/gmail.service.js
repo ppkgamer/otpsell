@@ -163,11 +163,28 @@ function extractOTP(text) {
 }
 
 // ── Extract original recipient from forwarded email ───────────
-// Netflix embeds the real recipient in footer: "ข้อความนี้ส่งถึง [email@x.com]"
+// Netflix embeds the real recipient in footer (multiple formats across locales)
 function extractOriginalRecipient(text) {
   if (!text) return null;
-  const match = text.match(/\[([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\]/);
-  return match ? match[1] : null;
+  const EMAIL = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+
+  // Format 1: [email@x.com] — Netflix standard text footer
+  const m1 = text.match(new RegExp(`\\[(${EMAIL.source})\\]`));
+  if (m1) return m1[1];
+
+  // Format 2: "sent to / ส่งถึง / envoyé à / ..." followed by email
+  // Allow up to 120 chars (may include HTML tags) between keyword and email
+  const sentToRe = new RegExp(
+    `(?:sent\\s+to|was\\s+sent\\s+to|this\\s+email\\s+was\\s+sent\\s+to` +
+    `|ส่งถึง|ข้อความนี้ส่งถึง|อีเมลนี้ส่งถึง` +
+    `|enviado\\s+a|envoy[eé]\\s+[aà]|gesendet\\s+an` +
+    `|送信先|发送至|발송\\s+대상|inviato\\s+a)[\\s\\S]{0,120}?(${EMAIL.source})`,
+    'i'
+  );
+  const m2 = text.match(sentToRe);
+  if (m2) return m2[1];
+
+  return null;
 }
 
 // ── Netflix Temporary Access Code detection ──────────────────
@@ -670,6 +687,46 @@ async function pollGmailAccount(gmailAccount) {
     where: { id: gmailAccount.id },
     data: { lastPolledAt: new Date() },
   });
+
+  // ── Retroactive toEmail recovery ──────────────────────────────
+  // OTPs in the last 2 hours with null toEmail: re-fetch from Gmail and try again
+  const nullToEmailOtps = await prisma.otp.findMany({
+    where: {
+      gmailAccountId: gmailAccount.id,
+      toEmail: null,
+      receivedAt: { gt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    },
+    select: { id: true, messageId: true },
+  });
+
+  for (const record of nullToEmailOtps) {
+    try {
+      const detail = await gmail.users.messages.get({
+        userId: 'me',
+        id: record.messageId,
+        format: 'full',
+      });
+      const headers = detail.data.payload.headers;
+      const toHeader = headers.find(h => h.name === 'To')?.value ?? null;
+      const body = getBodyFromPayload(detail.data.payload);
+      const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
+
+      const toEmailFromHeader = toHeader
+        ? (toHeader.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/) || [])[1] ?? null
+        : null;
+      const toEmailFromBody = extractOriginalRecipient(body) || extractOriginalRecipient(htmlBody);
+      const recovered = (toEmailFromHeader && toEmailFromHeader !== gmailAccount.email)
+        ? toEmailFromHeader
+        : toEmailFromBody;
+
+      if (recovered) {
+        await prisma.otp.update({ where: { id: record.id }, data: { toEmail: recovered } });
+        console.log(`[poll] Recovered toEmail=${recovered} for msg ${record.messageId}`);
+      }
+    } catch (e) {
+      console.warn(`[poll] toEmail recovery failed for ${record.messageId}: ${e.message}`);
+    }
+  }
 
   return newOtps;
 }

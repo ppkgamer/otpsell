@@ -241,7 +241,7 @@ function OTPCard({ otp, tick }) {
           />
         </div>
         <div className="flex justify-between items-center mt-1">
-          <span className="text-xs text-slate-400 font-mono">{otp.toEmail || senderName || otp.gmailAccount?.email}</span>
+          <span className="text-xs text-slate-400 font-mono">{otp.toEmail || otp.gmailAccount?.email}</span>
           {countdown && (
             <span className={`text-xs font-mono font-bold ${
               progress > 60 ? 'text-emerald-600' : progress > 30 ? 'text-yellow-600' : 'text-red-500'
