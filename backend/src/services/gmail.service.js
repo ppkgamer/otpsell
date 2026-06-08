@@ -347,40 +347,100 @@ function extractTempCodeLink(html) {
 function isNetflixNewDevice(subject) {
   const sub = (subject || '').toLowerCase();
   const keywords = [
-    // Thai
-    'อุปกรณ์ใหม่', 'เปลี่ยนรหัสผ่าน', 'ใหม่กำลังใช้งาน',
-    // English
+    // Thai — new device
+    'อุปกรณ์ใหม่', 'ใหม่กำลังใช้งาน',
+    // Thai — password reset
+    'เปลี่ยนรหัสผ่าน', 'รีเซ็ตรหัสผ่าน', 'ตั้งรหัสผ่านใหม่', 'รีเซ็ตรหัส',
+    // English — new device
     'new device', 'new sign-in', 'someone signed in', 'signed into',
     'new login', 'unrecognized device',
+    // English — password reset
+    'password reset', 'reset your password', 'reset password',
+    'complete your password', 'forgot your password', 'password recovery',
+    'recover your password', 'update your password',
     // Japanese
-    '新しいデバイス', 'パスワードを変更',
-    // Chinese
-    '新设备', '新登录', '更改密码',
+    '新しいデバイス', 'パスワードを変更', 'パスワードのリセット', 'パスワードをリセット', 'パスワード再設定',
+    // Chinese (Simplified)
+    '新设备', '新登录', '更改密码', '密码重置', '重置密码', '找回密码',
+    // Chinese (Traditional)
+    '新裝置', '新登入', '更改密碼', '密碼重設', '重設密碼',
     // Korean
-    '새 기기', '새로운 기기', '비밀번호 변경',
+    '새 기기', '새로운 기기', '비밀번호 변경', '비밀번호 재설정', '비밀번호 초기화',
     // Spanish
     'nuevo dispositivo', 'nueva sesión', 'cambiar contraseña',
+    'restablecer contraseña', 'restablecer tu contraseña', 'restablecimiento de contraseña',
     // French
     'nouvel appareil', 'nouvelle connexion', 'changer le mot de passe',
+    'réinitialiser le mot de passe', 'réinitialisation du mot de passe',
     // German
     'neues gerät', 'neue anmeldung', 'passwort ändern',
+    'passwort zurücksetzen', 'passwort-zurücksetzung', 'kennwort zurücksetzen',
     // Portuguese
     'novo dispositivo', 'nova sessão', 'alterar senha',
+    'redefinir senha', 'redefinição de senha', 'recuperar senha',
     // Italian
     'nuovo dispositivo', 'nuovo accesso',
+    'reimposta password', 'reimpostazione password', 'recupera password',
     // Dutch
     'nieuw apparaat', 'nieuwe aanmelding',
+    'wachtwoord opnieuw instellen', 'wachtwoord resetten',
+    // Polish
+    'resetowanie hasła', 'zresetuj hasło',
+    // Turkish
+    'şifreni sıfırla', 'şifre sıfırlama',
+    // Arabic
+    'إعادة تعيين كلمة المرور', 'استعادة كلمة المرور',
+    // Russian
+    'сброс пароля', 'сбросить пароль', 'восстановление пароля',
+    // Vietnamese
+    'đặt lại mật khẩu', 'khôi phục mật khẩu',
+    // Indonesian / Malay
+    'atur ulang kata sandi', 'reset kata sandi',
+    // Hindi
+    'पासवर्ड रीसेट', 'पासवर्ड बदलें',
   ];
   return keywords.some(kw => sub.includes(kw));
 }
 
 function extractPasswordResetLink(html) {
-  // หา href ใกล้ keyword เปลี่ยนรหัสผ่าน
   const ctaTexts = [
-    'เปลี่ยนรหัสผ่าน', 'change.*password', 'reset.*password',
-    'update.*password', 'パスワードを変更', '更改密码', '비밀번호 변경',
-    'cambiar contraseña', 'changer.*mot de passe', 'passwort ändern',
-    'alterar senha', 'change password',
+    // Thai
+    'เปลี่ยนรหัสผ่าน', 'รีเซ็ตรหัสผ่าน', 'ตั้งรหัสผ่านใหม่',
+    // English
+    'reset password', 'reset.*password', 'change.*password', 'update.*password',
+    'recover.*password', 'set.*new.*password', 'create.*new.*password',
+    // Japanese
+    'パスワードを変更', 'パスワードをリセット', 'パスワード.*リセット',
+    // Chinese (Simplified)
+    '更改密码', '重置密码', '密码重置',
+    // Chinese (Traditional)
+    '更改密碼', '重設密碼',
+    // Korean
+    '비밀번호 변경', '비밀번호.*재설정', '비밀번호.*초기화',
+    // Spanish
+    'cambiar contraseña', 'restablecer.*contraseña',
+    // French
+    'changer.*mot de passe', 'réinitialiser.*mot de passe',
+    // German
+    'passwort ändern', 'passwort.*zurücksetzen',
+    // Portuguese
+    'alterar senha', 'redefinir.*senha',
+    // Italian
+    'reimposta.*password', 'cambia.*password',
+    // Dutch
+    'wachtwoord.*resetten', 'wachtwoord.*instellen',
+    // Polish
+    'zresetuj.*hasło', 'zmień.*hasło',
+    // Turkish
+    'sıfırla', 'şifre.*değiştir',
+    // Arabic
+    'إعادة.*تعيين', 'تغيير.*كلمة',
+    // Russian
+    'сброс пароля', 'сбросить пароль', 'изменить пароль',
+    // Vietnamese
+    'đặt lại mật khẩu', 'thay đổi mật khẩu',
+    // Indonesian
+    'atur ulang.*kata sandi', 'reset.*kata sandi',
   ];
 
   for (const pattern of ctaTexts) {
