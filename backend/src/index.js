@@ -15,6 +15,13 @@ const adminRoutes = require('./routes/admin');
 const { startPollingJob } = require('./jobs/pollEmails');
 const { startCreditDeductionJob } = require('./jobs/creditDeduction');
 
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
 const app = express();
 
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));

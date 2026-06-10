@@ -6,9 +6,15 @@ const { pollHotmailAccount } = require('../services/hotmail.service');
 const prisma = new PrismaClient();
 
 async function runPoll() {
-  const accounts = await prisma.gmailAccount.findMany({
-    where: { isActive: true, user: { isActive: true } },
-  });
+  let accounts;
+  try {
+    accounts = await prisma.gmailAccount.findMany({
+      where: { isActive: true, user: { isActive: true } },
+    });
+  } catch (err) {
+    console.error('[poll] Error fetching accounts:', err.message);
+    return;
+  }
 
   if (accounts.length === 0) return;
 
@@ -27,12 +33,16 @@ async function runPoll() {
 }
 
 async function runCleanup() {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const result = await prisma.otp.deleteMany({
-    where: { receivedAt: { lt: oneHourAgo } },
-  });
-  if (result.count > 0) {
-    console.log(`[cleanup] Deleted ${result.count} OTP(s) older than 1 hour`);
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const result = await prisma.otp.deleteMany({
+      where: { receivedAt: { lt: oneHourAgo } },
+    });
+    if (result.count > 0) {
+      console.log(`[cleanup] Deleted ${result.count} OTP(s) older than 1 hour`);
+    }
+  } catch (err) {
+    console.error('[cleanup] Error:', err.message);
   }
 }
 
