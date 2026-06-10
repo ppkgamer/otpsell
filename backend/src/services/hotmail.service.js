@@ -72,6 +72,8 @@ async function refreshIfNeeded(account, err) {
       ...(refreshed.refresh_token && { refreshToken: refreshed.refresh_token }),
     },
   });
+  account.accessToken = newToken;
+  if (refreshed.refresh_token) account.refreshToken = refreshed.refresh_token;
   return newToken;
 }
 

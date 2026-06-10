@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { getAuthUrl, handleCallback } = require('../services/hotmail.service');
+const { invalidateAccountsCache } = require('../jobs/pollEmails');
 const PLANS = require('../config/plans');
 
 const router = express.Router();
@@ -58,6 +59,7 @@ router.get('/callback', async (req, res) => {
 
   try {
     const email = await handleCallback(code, userId, isAdminManaged);
+    invalidateAccountsCache();
     res.redirect(`${frontendUrl}/dashboard?hotmail=connected&email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error('[hotmail] OAuth callback error:', err.message, err.response?.data);

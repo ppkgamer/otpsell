@@ -613,10 +613,14 @@ async function pollGmailAccount(gmailAccount) {
   // Persist refreshed access token automatically
   auth.on('tokens', async (tokens) => {
     if (tokens.access_token) {
+      gmailAccount.accessToken = tokens.access_token;
       await prisma.gmailAccount.update({
         where: { id: gmailAccount.id },
         data: { accessToken: tokens.access_token },
       });
+    }
+    if (tokens.refresh_token) {
+      gmailAccount.refreshToken = tokens.refresh_token;
     }
   });
 

@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { getAuthUrl, handleCallback } = require('../services/gmail.service');
+const { invalidateAccountsCache } = require('../jobs/pollEmails');
 const PLANS = require('../config/plans');
 
 const router = express.Router();
@@ -41,6 +42,7 @@ router.get('/callback', async (req, res) => {
 
   try {
     const email = await handleCallback(code, userId, isAdminManaged);
+    invalidateAccountsCache();
     res.redirect(`${frontendUrl}/dashboard?gmail=connected&email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error('[gmail] OAuth callback error:', err.message);
@@ -83,6 +85,7 @@ router.patch('/accounts/:id/toggle', authenticate, requireRole(['USER']), async 
       data: { isActive: !account.isActive },
       select: { id: true, email: true, isActive: true },
     });
+    invalidateAccountsCache();
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,6 +101,7 @@ router.delete('/accounts/:id', authenticate, requireRole(['USER']), async (req, 
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
     await prisma.gmailAccount.delete({ where: { id: req.params.id } });
+    invalidateAccountsCache();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

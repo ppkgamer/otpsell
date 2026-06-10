@@ -5,12 +5,39 @@ const { pollHotmailAccount } = require('../services/hotmail.service');
 
 const prisma = new PrismaClient();
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let accountsCache = null;
+let cacheExpiry = 0;
+
+async function getAccounts() {
+  if (accountsCache && Date.now() < cacheExpiry) {
+    return accountsCache;
+  }
+
+  accountsCache = await prisma.gmailAccount.findMany({
+    where: { isActive: true, user: { isActive: true } },
+    select: {
+      id: true,
+      email: true,
+      provider: true,
+      accessToken: true,
+      refreshToken: true,
+      lastPolledAt: true,
+      isActive: true,
+    },
+  });
+  cacheExpiry = Date.now() + CACHE_TTL_MS;
+  return accountsCache;
+}
+
+function invalidateAccountsCache() {
+  cacheExpiry = 0;
+}
+
 async function runPoll() {
   let accounts;
   try {
-    accounts = await prisma.gmailAccount.findMany({
-      where: { isActive: true, user: { isActive: true } },
-    });
+    accounts = await getAccounts();
   } catch (err) {
     console.error('[poll] Error fetching accounts:', err.message);
     return;
@@ -22,6 +49,7 @@ async function runPoll() {
     try {
       const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
       const otps = await pollFn(account);
+      account.lastPolledAt = new Date();
       if (otps.length > 0) {
         await prisma.otp.createMany({ data: otps, skipDuplicates: true });
         console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
@@ -47,11 +75,11 @@ async function runCleanup() {
 }
 
 function startPollingJob() {
-  cron.schedule('*/15 * * * * *', runPoll);
+  cron.schedule('*/20 * * * * *', runPoll);
   cron.schedule('*/10 * * * *', runCleanup); // cleanup every 10 minutes
   runCleanup(); // cleanup on startup
-  console.log('[poll] Job started — every 15 seconds');
+  console.log('[poll] Job started — every 20 seconds');
   console.log('[cleanup] Job started — every 10 minutes');
 }
 
-module.exports = { startPollingJob };
+module.exports = { startPollingJob, invalidateAccountsCache };
