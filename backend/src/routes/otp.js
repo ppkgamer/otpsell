@@ -1,14 +1,23 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
+const prisma = require('../lib/prisma');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// แคช id ของทุก gmailAccount สำหรับ ADMIN (ขอใหม่ทุก /api/otp และ /api/otp/latest poll)
+const ADMIN_IDS_CACHE_TTL_MS = 60 * 1000; // 1 minute
+let adminGmailIdsCache = null;
+let adminGmailIdsCacheExpiry = 0;
 
 async function getAccessibleGmailIds(userId, role) {
   if (role === 'ADMIN') {
+    if (adminGmailIdsCache && Date.now() < adminGmailIdsCacheExpiry) {
+      return adminGmailIdsCache;
+    }
     const all = await prisma.gmailAccount.findMany({ select: { id: true } });
-    return all.map((a) => a.id);
+    adminGmailIdsCache = all.map((a) => a.id);
+    adminGmailIdsCacheExpiry = Date.now() + ADMIN_IDS_CACHE_TTL_MS;
+    return adminGmailIdsCache;
   }
   if (role === 'USER') {
     const accounts = await prisma.gmailAccount.findMany({

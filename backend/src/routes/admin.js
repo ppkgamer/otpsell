@@ -1,11 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { invalidateAccountsCache } = require('../jobs/pollEmails');
 const PLANS = require('../config/plans');
+const prisma = require('../lib/prisma');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/admin/users — USER role only
 router.get('/users', authenticate, requireRole(['ADMIN']), async (req, res) => {

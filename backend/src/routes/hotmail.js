@@ -1,12 +1,11 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { getAuthUrl, handleCallback } = require('../services/hotmail.service');
 const { invalidateAccountsCache } = require('../jobs/pollEmails');
 const PLANS = require('../config/plans');
+const prisma = require('../lib/prisma');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/hotmail/debug — returns generated auth URL for inspection
 router.get('/debug', authenticate, async (req, res) => {

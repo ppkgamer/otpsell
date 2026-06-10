@@ -81,5 +81,7 @@ model Otp {
   createdAt      DateTime     @default(now())
 
   @@unique([messageId, gmailAccountId])
+  @@index([gmailAccountId, receivedAt])
+  @@index([receivedAt])
 }
 

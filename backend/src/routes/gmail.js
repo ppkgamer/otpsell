@@ -1,12 +1,11 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { getAuthUrl, handleCallback } = require('../services/gmail.service');
 const { invalidateAccountsCache } = require('../jobs/pollEmails');
 const PLANS = require('../config/plans');
+const prisma = require('../lib/prisma');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/gmail/connect — returns OAuth2 URL (เช็ค plan limit ก่อน)
 router.get('/connect', authenticate, requireRole(['USER', 'ADMIN']), async (req, res) => {

@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { PrismaClient } = require('@prisma/client');
 const {
   isNetflixOTP, extractOTP,
   isNetflixHousehold, extractHouseholdLink,
@@ -7,8 +6,7 @@ const {
   isNetflixTempCode, extractTempCodeLink,
   extractOriginalRecipient,
 } = require('./gmail.service');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // /common = personal (Hotmail/Outlook.com) + organizational accounts
 const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';

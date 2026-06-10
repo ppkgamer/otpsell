@@ -1,9 +1,7 @@
 const cron = require('node-cron');
-const { PrismaClient } = require('@prisma/client');
-const { pollGmailAccount } = require('../services/gmail.service');
+const { pollGmailAccount, recoverToEmailForAccount } = require('../services/gmail.service');
 const { pollHotmailAccount } = require('../services/hotmail.service');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let accountsCache = null;
@@ -60,6 +58,42 @@ async function runPoll() {
   }
 }
 
+async function runToEmailRecovery() {
+  try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const pending = await prisma.otp.findMany({
+      where: {
+        toEmail: null,
+        receivedAt: { gt: twoHoursAgo },
+        gmailAccount: { provider: 'gmail' },
+      },
+      select: { gmailAccountId: true },
+      distinct: ['gmailAccountId'],
+    });
+
+    if (pending.length === 0) return;
+
+    const accounts = await prisma.gmailAccount.findMany({
+      where: { id: { in: pending.map(p => p.gmailAccountId) } },
+      select: { id: true, email: true, accessToken: true, refreshToken: true },
+    });
+
+    let total = 0;
+    for (const account of accounts) {
+      try {
+        total += await recoverToEmailForAccount(account);
+      } catch (err) {
+        console.error(`[toEmail-recovery] Error on ${account.email}:`, err.message);
+      }
+    }
+    if (total > 0) {
+      console.log(`[toEmail-recovery] Recovered ${total} toEmail value(s)`);
+    }
+  } catch (err) {
+    console.error('[toEmail-recovery] Error:', err.message);
+  }
+}
+
 async function runCleanup() {
   try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -77,9 +111,11 @@ async function runCleanup() {
 function startPollingJob() {
   cron.schedule('*/20 * * * * *', runPoll);
   cron.schedule('*/10 * * * *', runCleanup); // cleanup every 10 minutes
+  cron.schedule('*/5 * * * *', runToEmailRecovery); // toEmail recovery every 5 minutes
   runCleanup(); // cleanup on startup
   console.log('[poll] Job started — every 20 seconds');
   console.log('[cleanup] Job started — every 10 minutes');
+  console.log('[toEmail-recovery] Job started — every 5 minutes');
 }
 
 module.exports = { startPollingJob, invalidateAccountsCache };

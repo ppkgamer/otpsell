@@ -1,7 +1,5 @@
 const { google } = require('googleapis');
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 
@@ -752,8 +750,12 @@ async function pollGmailAccount(gmailAccount) {
     data: { lastPolledAt: new Date() },
   });
 
-  // ── Retroactive toEmail recovery ──────────────────────────────
-  // OTPs in the last 2 hours with null toEmail: re-fetch from Gmail and try again
+  return newOtps;
+}
+
+// ── Retroactive toEmail recovery (batched job, see pollEmails.js) ──
+// OTPs in the last 2 hours with null toEmail: re-fetch from Gmail and try again
+async function recoverToEmailForAccount(gmailAccount) {
   const nullToEmailOtps = await prisma.otp.findMany({
     where: {
       gmailAccountId: gmailAccount.id,
@@ -763,6 +765,24 @@ async function pollGmailAccount(gmailAccount) {
     select: { id: true, messageId: true },
   });
 
+  if (nullToEmailOtps.length === 0) return 0;
+
+  const auth = createOAuthClient();
+  auth.setCredentials({
+    access_token: gmailAccount.accessToken,
+    refresh_token: gmailAccount.refreshToken,
+  });
+  auth.on('tokens', async (tokens) => {
+    if (tokens.access_token) {
+      await prisma.gmailAccount.update({
+        where: { id: gmailAccount.id },
+        data: { accessToken: tokens.access_token },
+      });
+    }
+  });
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  let recoveredCount = 0;
   for (const record of nullToEmailOtps) {
     try {
       const detail = await gmail.users.messages.get({
@@ -785,14 +805,15 @@ async function pollGmailAccount(gmailAccount) {
 
       if (recovered) {
         await prisma.otp.update({ where: { id: record.id }, data: { toEmail: recovered } });
-        console.log(`[poll] Recovered toEmail=${recovered} for msg ${record.messageId}`);
+        recoveredCount++;
+        console.log(`[toEmail-recovery] Recovered toEmail=${recovered} for msg ${record.messageId}`);
       }
     } catch (e) {
-      console.warn(`[poll] toEmail recovery failed for ${record.messageId}: ${e.message}`);
+      console.warn(`[toEmail-recovery] Failed for ${record.messageId}: ${e.message}`);
     }
   }
 
-  return newOtps;
+  return recoveredCount;
 }
 
 module.exports = {
@@ -802,4 +823,5 @@ module.exports = {
   isNetflixTempCode, extractTempCodeLink,
   isNetflixHousehold, extractHouseholdLink,
   extractOriginalRecipient,
+  recoverToEmailForAccount,
 };
