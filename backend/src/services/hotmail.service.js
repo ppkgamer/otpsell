@@ -111,6 +111,27 @@ function isNetflixSender(sender) {
   return (sender || '').toLowerCase().includes('netflix.com');
 }
 
+async function fetchFolderMessages(account, token, folderPath, since) {
+  const url = folderPath
+    ? `${GRAPH_BASE}/me/mailFolders/${folderPath}/messages`
+    : `${GRAPH_BASE}/me/messages`;
+  const params = {
+    $filter:  `receivedDateTime gt ${since}`,
+    $top:     10,
+    $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
+    $orderby: 'receivedDateTime desc',
+  };
+  try {
+    const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` }, params });
+    return { messages: res.data.value || [], token };
+  } catch (err) {
+    // token หมดอายุ — refresh แล้วลองใหม่
+    const newToken = await refreshIfNeeded(account, err);
+    const res = await axios.get(url, { headers: { Authorization: `Bearer ${newToken}` }, params });
+    return { messages: res.data.value || [], token: newToken };
+  }
+}
+
 async function pollHotmailAccount(account) {
   let token = await getValidToken(account);
 
@@ -118,32 +139,30 @@ async function pollHotmailAccount(account) {
     ? account.lastPolledAt.toISOString()
     : new Date(Date.now() - 30000).toISOString();
 
-  let listRes;
+  // Inbox/mailbox หลัก (รวมเมลแท็บ "อื่นๆ" ของ Focused Inbox ด้วย เพราะยังอยู่ใน Inbox folder เดิม)
+  const inboxResult = await fetchFolderMessages(account, token, null, since);
+  token = inboxResult.token;
+  const inboxMessages = inboxResult.messages;
+
+  // โฟลเดอร์ Junk Email — เผื่อเมล Netflix ถูกตีเป็นสแปมแล้วตกหล่นไป (ไม่ทำให้รอบ poll ล้มถ้าพลาด)
+  let junkMessages = [];
   try {
-    listRes = await axios.get(`${GRAPH_BASE}/me/messages`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
-        $filter:  `receivedDateTime gt ${since}`,
-        $top:     10,
-        $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
-        $orderby: 'receivedDateTime desc',
-      },
-    });
+    const junkResult = await fetchFolderMessages(account, token, 'junkemail', since);
+    token = junkResult.token;
+    junkMessages = junkResult.messages;
   } catch (err) {
-    // token หมดอายุ — refresh แล้วลองใหม่
-    token = await refreshIfNeeded(account, err);
-    listRes = await axios.get(`${GRAPH_BASE}/me/messages`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
-        $filter:  `receivedDateTime gt ${since}`,
-        $top:     10,
-        $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
-        $orderby: 'receivedDateTime desc',
-      },
-    });
+    console.error(`[hotmail-poll] Junk folder fetch error for ${account.email}:`, err.message);
   }
 
-  const messages = listRes.data.value || [];
+  // รวมและตัดรายการซ้ำ เผื่อข้อความเดียวกันถูกดึงมาจากทั้งสองโฟลเดอร์
+  const seen = new Set();
+  const messages = [];
+  for (const msg of [...inboxMessages, ...junkMessages]) {
+    if (seen.has(msg.id)) continue;
+    seen.add(msg.id);
+    messages.push(msg);
+  }
+
   const newOtps  = [];
 
   for (const msg of messages) {
