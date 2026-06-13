@@ -4,6 +4,7 @@ const {
   isNetflixHousehold, extractHouseholdLink,
   isNetflixNewDevice, extractPasswordResetLink,
   isNetflixTempCode, extractTempCodeLink,
+  isIqiyiEmail, isIqiyiOTP,
   extractOriginalRecipient,
 } = require('./gmail.service');
 const prisma = require('../lib/prisma');
@@ -179,31 +180,39 @@ async function pollHotmailAccount(account) {
       ? toEmailFromHeader
       : toEmailFromBody;
 
-    if (!isNetflixSender(sender)) continue;
+    const isNetflix = isNetflixSender(sender);
+    const isIqiyi = !isNetflix && isIqiyiEmail(sender);
+    if (!isNetflix && !isIqiyi) continue;
 
-    if (isNetflixNewDevice(subject)) {
+    if (isNetflix && isNetflixNewDevice(subject)) {
       const link = extractPasswordResetLink(body);
       if (link) {
         newOtps.push({ type: 'password_reset_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix password reset link in ${account.email}`);
       }
-    } else if (isNetflixHousehold(subject, sender)) {
+    } else if (isNetflix && isNetflixHousehold(subject, sender)) {
       const link = extractHouseholdLink(body);
       if (link) {
         newOtps.push({ type: 'household_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix household link in ${account.email}`);
       }
-    } else if (isNetflixTempCode(subject)) {
+    } else if (isNetflix && isNetflixTempCode(subject)) {
       const link = extractTempCodeLink(body);
       if (link) {
         newOtps.push({ type: 'temp_code_link', code: link, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix temp code link in ${account.email}`);
       }
-    } else if (isNetflixOTP(subject, body)) {
+    } else if (isNetflix && isNetflixOTP(subject, body)) {
       const code = extractOTP(subject + ' ' + body);
       if (code) {
         newOtps.push({ type: 'otp', code, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
         console.log(`[hotmail-poll] Netflix OTP ${code} (to: ${toEmail ?? 'unknown'}) in ${account.email}`);
+      }
+    } else if (isIqiyi && isIqiyiOTP(subject, body)) {
+      const code = extractOTP(subject + ' ' + body);
+      if (code) {
+        newOtps.push({ type: 'otp', code, sender, toEmail, subject, messageId: msg.id, gmailAccountId: account.id, receivedAt });
+        console.log(`[hotmail-poll] iQIYI OTP ${code} (to: ${toEmail ?? 'unknown'}) in ${account.email}`);
       }
     }
   }

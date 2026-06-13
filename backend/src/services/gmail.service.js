@@ -114,6 +114,31 @@ function isNetflixOTP(subject, body) {
   // body มี keyword + มีตัวเลข 4-6 หลัก (หลังตัด URL แล้ว) → OTP จริง
   return matchSub || (matchBod && hasOTPDigits);
 }
+
+// ── iQIYI OTP detection ────────────────────────────────────────
+// เช็คว่า email มาจาก iQIYI จริงไหม (domain iq.com หรือชื่อผู้ส่งมี iqiyi)
+function isIqiyiEmail(sender) {
+  const s = (sender || '').toLowerCase();
+  return s.includes('@iq.com') || s.includes('iqiyi');
+}
+
+// เช็คว่าเป็น OTP email จาก iQIYI
+function isIqiyiOTP(subject, body) {
+  const sub = (subject || '').toLowerCase();
+  const bod = stripUrls((body || '').toLowerCase());
+
+  const fragments = [
+    'otp', 'verification', 'verify', 'security code',
+    'รหัส otp', 'รหัสยืนยัน', 'ยืนยันความปลอดภัย',
+  ];
+
+  const matchSub = fragments.some(f => sub.includes(f));
+  const matchBod = fragments.some(f => bod.includes(f));
+  const hasOTPDigits = /\b\d{4,6}\b/.test(bod);
+
+  return matchSub || (matchBod && hasOTPDigits);
+}
+
 function extractOTP(text) {
   const clean = stripUrls(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
@@ -669,13 +694,15 @@ async function pollGmailAccount(gmailAccount) {
       ? toEmailFromHeader
       : toEmailFromBody;
 
-    // ── เช็ค Netflix ก่อนเลย ถ้าไม่ใช่ข้ามทันที ──
-    if (!isNetflixEmail(sender)) {
+    // ── เช็ค Netflix หรือ iQIYI ก่อนเลย ถ้าไม่ใช่ข้ามทันที ──
+    const isNetflix = isNetflixEmail(sender);
+    const isIqiyi = !isNetflix && isIqiyiEmail(sender);
+    if (!isNetflix && !isIqiyi) {
       continue;
     }
 
     // Netflix New Device → extract password reset link
-    if (isNetflixNewDevice(subject)) {
+    if (isNetflix && isNetflixNewDevice(subject)) {
       const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
       const link = extractPasswordResetLink(htmlBody || body);
       if (link) {
@@ -692,7 +719,7 @@ async function pollGmailAccount(gmailAccount) {
         console.log(`[poll] Netflix password reset link found in ${gmailAccount.email}`);
       }
     // Netflix Household email → extract confirmation link
-    } else if (isNetflixHousehold(subject, sender)) {
+    } else if (isNetflix && isNetflixHousehold(subject, sender)) {
       const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
       const link = extractHouseholdLink(htmlBody || body);
       if (link) {
@@ -710,7 +737,7 @@ async function pollGmailAccount(gmailAccount) {
       }
     // Netflix Temporary Access Code → ดึง link จากปุ่ม "รับรหัส"
     // ต้องเช็คก่อน isNetflixOTP เพราะ subject มี "รหัส" ทำให้ผ่าน OTP check ด้วย
-    } else if (isNetflixTempCode(subject)) {
+    } else if (isNetflix && isNetflixTempCode(subject)) {
       const htmlBody = getHtmlBodyFromPayload(detail.data.payload);
       const link = extractTempCodeLink(htmlBody || body);
       if (link) {
@@ -726,7 +753,7 @@ async function pollGmailAccount(gmailAccount) {
         });
         console.log(`[poll] Netflix temp code link found in ${gmailAccount.email}`);
       }
-    } else if (isNetflixOTP(subject, body)) {
+    } else if (isNetflix && isNetflixOTP(subject, body)) {
       // เฉพาะ Netflix OTP email จริงๆ (มี keyword รหัส/code/sign-in) เท่านั้น
       const code = extractOTP((subject ?? '') + ' ' + body);
       if (code) {
@@ -741,6 +768,22 @@ async function pollGmailAccount(gmailAccount) {
           receivedAt,
         });
         console.log(`[poll] Netflix OTP found: ${code} (to: ${toEmail ?? 'unknown'}) in ${gmailAccount.email}`);
+      }
+    } else if (isIqiyi && isIqiyiOTP(subject, body)) {
+      // iQIYI OTP email — sender จาก @iq.com / iQIYI
+      const code = extractOTP((subject ?? '') + ' ' + body);
+      if (code) {
+        newOtps.push({
+          type: 'otp',
+          code,
+          sender,
+          toEmail,
+          subject,
+          messageId: msg.id,
+          gmailAccountId: gmailAccount.id,
+          receivedAt,
+        });
+        console.log(`[poll] iQIYI OTP found: ${code} (to: ${toEmail ?? 'unknown'}) in ${gmailAccount.email}`);
       }
     }
   }
@@ -822,6 +865,7 @@ module.exports = {
   isNetflixNewDevice, extractPasswordResetLink,
   isNetflixTempCode, extractTempCodeLink,
   isNetflixHousehold, extractHouseholdLink,
+  isIqiyiEmail, isIqiyiOTP,
   extractOriginalRecipient,
   recoverToEmailForAccount,
 };
