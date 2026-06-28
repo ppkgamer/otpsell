@@ -46,6 +46,7 @@ export default function SubUsers() {
   const selAll   = (suId, list) => setMultiSel(p => ({ ...p, [suId]: list.map(g => g.id) }))
   const clearSel = (suId)       => setMultiSel(p => ({ ...p, [suId]: [] }))
   const [search, setSearch] = useState('')
+  const [gmailSearch, setGmailSearch] = useState('')
   const [dialog, setDialog] = useState(null)
   const [expandedGmails, setExpandedGmails] = useState({})
   const { t, lang } = useLang()
@@ -82,6 +83,21 @@ export default function SubUsers() {
     setBusy(p => ({ ...p, [key]: true }))
     try { await fn(); await load() } finally { setBusy(p => ({ ...p, [key]: false })) }
   }
+
+  // Gmail → subuser reverse lookup
+  const gmailToSubuser = {}
+  subUsers.forEach(su => {
+    su.assignedGmails.forEach(a => {
+      if (!a.gmailAccount.isAdminManaged) {
+        gmailToSubuser[a.gmailAccount.id] = su
+      }
+    })
+  })
+
+  const gq = gmailSearch.trim().toLowerCase()
+  const filteredGmails = gq.length >= 2
+    ? gmailAccounts.filter(g => g.email.toLowerCase().includes(gq))
+    : []
 
   const q = search.trim().toLowerCase()
   const filtered = q
@@ -146,6 +162,88 @@ export default function SubUsers() {
         </form>
       )}
 
+      {/* Gmail search across all accounts */}
+      {!loading && gmailAccounts.length > 0 && (
+        <div className="mb-4">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-sm">📧</span>
+            <input
+              type="text"
+              value={gmailSearch}
+              onChange={e => setGmailSearch(e.target.value)}
+              placeholder={lang === 'th' ? 'ค้นหา Gmail เพื่อดูว่าอยู่ใน sub-user ไหน...' : 'Search Gmail to find which sub-user it belongs to...'}
+              className="input-dark w-full pl-9 pr-9"
+            />
+            {gmailSearch && (
+              <button onClick={() => setGmailSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors text-sm">
+                ✕
+              </button>
+            )}
+          </div>
+          {gq.length >= 2 && (
+            <div className="mt-2 space-y-1.5">
+              {filteredGmails.length === 0 ? (
+                <div className="text-xs text-slate-500 px-1">
+                  {lang === 'th' ? `ไม่พบ Gmail ที่มี "${gmailSearch}"` : `No Gmail matching "${gmailSearch}"`}
+                </div>
+              ) : filteredGmails.map(g => {
+                const assignedSu = gmailToSubuser[g.id]
+                return (
+                  <div key={g.id}
+                    className="flex items-center gap-3 card-dark px-3.5 py-2.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-slate-100 font-mono truncate">{g.email}</span>
+                        {g.provider === 'hotmail' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/25 font-semibold flex-shrink-0">Hotmail</span>
+                        )}
+                      </div>
+                      {assignedSu ? (
+                        <span className="text-xs text-purple-300 mt-0.5 flex items-center gap-1">
+                          <span className="text-slate-500">→</span> {assignedSu.username}
+                          <span className="font-mono text-slate-500 text-[10px]">({assignedSu.code})</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-600 mt-0.5 block">
+                          {lang === 'th' ? 'ยังไม่ได้ assign' : 'Unassigned'}
+                        </span>
+                      )}
+                    </div>
+                    {assignedSu && (
+                      <button
+                        onClick={() => setDialog({
+                          icon: '📧',
+                          title: lang === 'th' ? 'ยกเลิก Gmail นี้' : 'Remove Gmail',
+                          message: lang === 'th'
+                            ? `ยกเลิกการ assign "${g.email}" ออกจาก ${assignedSu.username}?`
+                            : `Remove "${g.email}" from ${assignedSu.username}?`,
+                          confirmLabel: lang === 'th' ? 'ยกเลิก Assign' : 'Remove',
+                          cancelLabel: lang === 'th' ? 'ปิด' : 'Cancel',
+                          onConfirm: () => op(`u-${assignedSu.id}-${g.id}`, () =>
+                            api.delete(`/auth/subuser/${assignedSu.id}/assign/${g.id}`)
+                          ),
+                        })}
+                        disabled={busy[`u-${assignedSu.id}-${g.id}`]}
+                        className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+                        {busy[`u-${assignedSu.id}-${g.id}`] ? '...' : lang === 'th' ? 'ลบ' : 'Remove'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              {filteredGmails.length > 0 && (
+                <div className="text-[11px] text-slate-600 px-1">
+                  {lang === 'th' ? `พบ ${filteredGmails.length} บัญชี` : `${filteredGmails.length} account(s) found`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sub-user name/code search */}
       {!loading && subUsers.length > 0 && (
         <div className="relative mb-4">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-sm">🔍</span>
