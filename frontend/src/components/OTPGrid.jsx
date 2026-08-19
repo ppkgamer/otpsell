@@ -1,7 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../lib/api'
 import { useLang } from '../context/LangContext'
 import { OTPCardSkeleton } from './Skeleton'
+
+function buildWsUrl(token, limit) {
+  const base = import.meta.env.VITE_API_URL ?? '/api'
+  const origin = /^https?:\/\//.test(base) ? new URL(base).origin : window.location.origin
+  return `${origin.replace(/^http/, 'ws')}/ws/otp?token=${encodeURIComponent(token)}&limit=${limit}`
+}
 
 // ── helpers ──────────────────────────────────────────────────
 const OTP_LIFETIME = 15 * 60 * 1000 // 15 minutes in ms
@@ -369,10 +375,12 @@ function HouseholdCard({ otp, tick }) {
 export default function OTPGrid() {
   const [otps, setOtps] = useState([])
   const [loading, setLoading] = useState(true)
-  const [countdown, setCountdown] = useState(8)
+  const [live, setLive] = useState(false)
   const [tick, setTick] = useState(0)
   const [lastUpdated, setLastUpdated] = useState(null)
   const { t, lang } = useLang()
+  const wsRef = useRef(null)
+  const reconnectTimerRef = useRef(null)
 
   const fetchOtps = useCallback(async () => {
     try {
@@ -386,15 +394,63 @@ export default function OTPGrid() {
     }
   }, [])
 
-  useEffect(() => { fetchOtps() }, [fetchOtps])
+  const mergeNewOtp = useCallback((otp) => {
+    setOtps(prev => (prev.some(o => o.messageId === otp.messageId) ? prev : [otp, ...prev]))
+    setLastUpdated(new Date())
+  }, [])
 
-  // Refresh countdown
+  // Live push connection — replaces HTTP polling. Falls back to REST
+  // polling only while the socket isn't connected (e.g. reconnecting).
   useEffect(() => {
-    const t = setInterval(() => {
-      setCountdown(p => { if (p <= 1) { fetchOtps(); return 8 } return p - 1 })
-    }, 1000)
-    return () => clearInterval(t)
-  }, [fetchOtps])
+    let cancelled = false
+
+    function connect() {
+      const token = localStorage.getItem('token')
+      if (!token) { fetchOtps(); return }
+
+      const ws = new WebSocket(buildWsUrl(token, 50))
+      wsRef.current = ws
+
+      ws.onopen = () => setLive(true)
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data)
+          if (msg.type === 'initial') {
+            setOtps(msg.otps)
+            setLastUpdated(new Date())
+            setLoading(false)
+          } else if (msg.type === 'new_otp') {
+            mergeNewOtp(msg.otp)
+          }
+        } catch { /* ignore malformed frame */ }
+      }
+      ws.onclose = (evt) => {
+        setLive(false)
+        if (cancelled) return
+        // Bad/expired token won't fix itself by retrying — let the REST
+        // fallback poll take over (it will hit the 401 redirect if needed).
+        if (evt.code === 4000 || evt.code === 4001) return
+        reconnectTimerRef.current = setTimeout(connect, 5000)
+      }
+      ws.onerror = () => ws.close()
+    }
+
+    connect()
+
+    return () => {
+      cancelled = true
+      clearTimeout(reconnectTimerRef.current)
+      wsRef.current?.close()
+    }
+  }, [fetchOtps, mergeNewOtp])
+
+  // Fallback polling only while the live socket isn't connected
+  useEffect(() => {
+    if (live) return
+    fetchOtps()
+    const id = setInterval(fetchOtps, 15000)
+    return () => clearInterval(id)
+  }, [live, fetchOtps])
 
   // 1-second tick for progress bars / countdowns
   useEffect(() => {
@@ -441,11 +497,12 @@ export default function OTPGrid() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="text-xs text-slate-700 font-mono tabular-nums">
-            {String(countdown).padStart(2, '0')}s
-          </div>
+          <span className={`flex items-center gap-1 text-xs font-mono ${live ? 'text-emerald-500' : 'text-slate-600'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            {live ? (lang === 'th' ? 'สด' : 'Live') : (lang === 'th' ? 'กำลังเชื่อมต่อ' : 'Reconnecting')}
+          </span>
           <button
-            onClick={() => { fetchOtps(); setCountdown(8) }}
+            onClick={fetchOtps}
             className="text-xs text-purple-400/70 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 px-3 py-1 rounded-lg hover:bg-purple-500/10 transition-all"
           >
             ↻

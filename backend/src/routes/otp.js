@@ -1,38 +1,17 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
+const { TTLCache } = require('../lib/cache');
+const { getAccessibleGmailIds } = require('../lib/access');
 
 const router = express.Router();
 
-// แคช id ของทุก gmailAccount สำหรับ ADMIN (ขอใหม่ทุก /api/otp และ /api/otp/latest poll)
-const ADMIN_IDS_CACHE_TTL_MS = 60 * 1000; // 1 minute
-let adminGmailIdsCache = null;
-let adminGmailIdsCacheExpiry = 0;
-
-async function getAccessibleGmailIds(userId, role) {
-  if (role === 'ADMIN') {
-    if (adminGmailIdsCache && Date.now() < adminGmailIdsCacheExpiry) {
-      return adminGmailIdsCache;
-    }
-    const all = await prisma.gmailAccount.findMany({ select: { id: true } });
-    adminGmailIdsCache = all.map((a) => a.id);
-    adminGmailIdsCacheExpiry = Date.now() + ADMIN_IDS_CACHE_TTL_MS;
-    return adminGmailIdsCache;
-  }
-  if (role === 'USER') {
-    const accounts = await prisma.gmailAccount.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    return accounts.map((a) => a.id);
-  }
-  // SUBUSER — เห็นเฉพาะที่ User assign ให้
-  const assignments = await prisma.subUserGmail.findMany({
-    where: { subUserId: userId },
-    select: { gmailAccountId: true },
-  });
-  return assignments.map((a) => a.gmailAccountId);
-}
+// Short-lived caches for the high-traffic public/customer-facing endpoints.
+// Keys MUST encode the full identity of the caller (code / subuserid) so a
+// cache entry can never be served to a different customer.
+const CACHE_TTL_MS = 3000;
+const publicFeedCache = new TTLCache(CACHE_TTL_MS);
+const serverFeedCache = new TTLCache(CACHE_TTL_MS);
 
 // GET /api/otp — flat list
 router.get('/', authenticate, async (req, res) => {
@@ -73,28 +52,33 @@ router.get('/feed', async (req, res) => {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   try {
-    let gmailIds;
+    // Cache key fully encodes subuserid/since/limit — a request for one
+    // subuser can never be served the cached response for another.
+    const cacheKey = `${subuserid || ''}:${since || ''}:${limit}`;
+    const otps = await serverFeedCache.getOrSet(cacheKey, async () => {
+      let gmailIds;
 
-    if (subuserid) {
-      // กรองเฉพาะ Gmail ที่ assign ให้ sub-user นี้
-      const assignments = await prisma.subUserGmail.findMany({
-        where: { subUserId: subuserid },
-        select: { gmailAccountId: true },
+      if (subuserid) {
+        // กรองเฉพาะ Gmail ที่ assign ให้ sub-user นี้
+        const assignments = await prisma.subUserGmail.findMany({
+          where: { subUserId: subuserid },
+          select: { gmailAccountId: true },
+        });
+        if (assignments.length === 0) return [];
+        gmailIds = assignments.map(a => a.gmailAccountId);
+      }
+
+      const where = {
+        ...(gmailIds && { gmailAccountId: { in: gmailIds } }),
+        ...(since && { receivedAt: { gt: new Date(parseInt(since)) } }),
+      };
+
+      return prisma.otp.findMany({
+        where,
+        include: { gmailAccount: { select: { email: true, provider: true } } },
+        orderBy: { receivedAt: 'desc' },
+        take: Math.min(parseInt(limit), 500),
       });
-      if (assignments.length === 0) return res.json([]);
-      gmailIds = assignments.map(a => a.gmailAccountId);
-    }
-
-    const where = {
-      ...(gmailIds && { gmailAccountId: { in: gmailIds } }),
-      ...(since && { receivedAt: { gt: new Date(parseInt(since)) } }),
-    };
-
-    const otps = await prisma.otp.findMany({
-      where,
-      include: { gmailAccount: { select: { email: true, provider: true } } },
-      orderBy: { receivedAt: 'desc' },
-      take: Math.min(parseInt(limit), 500),
     });
     res.json(otps);
   } catch (err) {
@@ -108,36 +92,43 @@ router.get('/public', async (req, res) => {
   if (!code) return res.status(400).json({ error: 'code required' });
 
   try {
-    const subUser = await prisma.user.findUnique({
-      where: { code: code.toUpperCase() },
-      select: { id: true, role: true, isActive: true },
-    });
-    if (!subUser || subUser.role !== 'SUBUSER') return res.status(404).json({ error: 'Invalid code' });
-    if (!subUser.isActive) return res.status(403).json({ error: 'Account disabled' });
+    // Cache key encodes the exact code (identity) + limit — each customer's
+    // code only ever reads/writes its own cache entry, never another's.
+    const cacheKey = `${code.toUpperCase()}:${limit}`;
+    const result = await publicFeedCache.getOrSet(cacheKey, async () => {
+      const subUser = await prisma.user.findUnique({
+        where: { code: code.toUpperCase() },
+        select: { id: true, role: true, isActive: true },
+      });
+      if (!subUser || subUser.role !== 'SUBUSER') return { status: 404, body: { error: 'Invalid code' } };
+      if (!subUser.isActive) return { status: 403, body: { error: 'Account disabled' } };
 
-    const assignments = await prisma.subUserGmail.findMany({
-      where: { subUserId: subUser.id },
-      select: { gmailAccountId: true },
-    });
-    if (assignments.length === 0) return res.json([]);
+      const assignments = await prisma.subUserGmail.findMany({
+        where: { subUserId: subUser.id },
+        select: { gmailAccountId: true },
+      });
+      if (assignments.length === 0) return { status: 200, body: [] };
 
-    const gmailIds = assignments.map(a => a.gmailAccountId);
-    const otps = await prisma.otp.findMany({
-      where: { gmailAccountId: { in: gmailIds } },
-      include: { gmailAccount: { select: { email: true, provider: true } } },
-      orderBy: { receivedAt: 'desc' },
-      take: Math.min(parseInt(limit), 100),
+      const gmailIds = assignments.map(a => a.gmailAccountId);
+      const otps = await prisma.otp.findMany({
+        where: { gmailAccountId: { in: gmailIds } },
+        include: { gmailAccount: { select: { email: true, provider: true } } },
+        orderBy: { receivedAt: 'desc' },
+        take: Math.min(parseInt(limit), 100),
+      });
+
+      // dedup by messageId
+      const seen = new Set();
+      const deduped = otps.filter(o => {
+        if (seen.has(o.messageId)) return false;
+        seen.add(o.messageId);
+        return true;
+      });
+
+      return { status: 200, body: deduped };
     });
 
-    // dedup by messageId
-    const seen = new Set();
-    const deduped = otps.filter(o => {
-      if (seen.has(o.messageId)) return false;
-      seen.add(o.messageId);
-      return true;
-    });
-
-    res.json(deduped);
+    res.status(result.status).json(result.body);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

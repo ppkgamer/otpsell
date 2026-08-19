@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { pollGmailAccount, recoverToEmailForAccount } = require('../services/gmail.service');
 const { pollHotmailAccount } = require('../services/hotmail.service');
 const prisma = require('../lib/prisma');
+const { notifyNewOtps } = require('../lib/wsHub');
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let accountsCache = null;
@@ -51,6 +52,7 @@ async function runPoll() {
       if (otps.length > 0) {
         await prisma.otp.createMany({ data: otps, skipDuplicates: true });
         console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
+        notifyNewOtps(prisma, otps).catch((err) => console.error('[ws] notify error:', err.message));
       }
     } catch (err) {
       console.error(`[poll] Error on ${account.email}:`, err.message);
@@ -109,11 +111,11 @@ async function runCleanup() {
 }
 
 function startPollingJob() {
-  cron.schedule('*/20 * * * * *', runPoll);
+  cron.schedule('*/30 * * * * *', runPoll);
   cron.schedule('*/10 * * * *', runCleanup); // cleanup every 10 minutes
   cron.schedule('*/5 * * * *', runToEmailRecovery); // toEmail recovery every 5 minutes
   runCleanup(); // cleanup on startup
-  console.log('[poll] Job started — every 20 seconds');
+  console.log('[poll] Job started — every 30 seconds');
   console.log('[cleanup] Job started — every 10 minutes');
   console.log('[toEmail-recovery] Job started — every 5 minutes');
 }

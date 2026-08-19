@@ -4,6 +4,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 
@@ -14,6 +15,8 @@ const otpRoutes = require('./routes/otp');
 const adminRoutes = require('./routes/admin');
 const { startPollingJob } = require('./jobs/pollEmails');
 const { startCreditDeductionJob } = require('./jobs/creditDeduction');
+const { initWsServer } = require('./lib/wsHub');
+const prisma = require('./lib/prisma');
 
 process.on('unhandledRejection', (err) => {
   console.error('[unhandledRejection]', err);
@@ -35,9 +38,13 @@ app.use('/api/admin', adminRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+const server = http.createServer(app);
+initWsServer(server, prisma);
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('[ws] OTP push server listening on /ws/otp');
   startPollingJob();
   startCreditDeductionJob();
 });
