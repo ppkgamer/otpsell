@@ -626,7 +626,7 @@ function getHtmlBodyFromPayload(payload) {
   return '';
 }
 
-async function pollGmailAccount(gmailAccount) {
+async function pollGmailAccount(gmailAccount, { persistLastPolledAt = true } = {}) {
   const auth = createOAuthClient();
   auth.setCredentials({
     access_token: gmailAccount.accessToken,
@@ -788,10 +788,13 @@ async function pollGmailAccount(gmailAccount) {
     }
   }
 
-  await prisma.gmailAccount.update({
-    where: { id: gmailAccount.id },
-    data: { lastPolledAt: new Date() },
-  });
+  gmailAccount.lastPolledAt = new Date();
+  if (persistLastPolledAt) {
+    await prisma.gmailAccount.update({
+      where: { id: gmailAccount.id },
+      data: { lastPolledAt: gmailAccount.lastPolledAt },
+    });
+  }
 
   return newOtps;
 }

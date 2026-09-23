@@ -131,7 +131,7 @@ async function fetchFolderMessages(account, token, folderPath, since) {
   }
 }
 
-async function pollHotmailAccount(account) {
+async function pollHotmailAccount(account, { persistLastPolledAt = true } = {}) {
   let token = await getValidToken(account);
 
   const since = account.lastPolledAt
@@ -217,10 +217,13 @@ async function pollHotmailAccount(account) {
     }
   }
 
-  await prisma.gmailAccount.update({
-    where: { id: account.id },
-    data: { lastPolledAt: new Date() },
-  });
+  account.lastPolledAt = new Date();
+  if (persistLastPolledAt) {
+    await prisma.gmailAccount.update({
+      where: { id: account.id },
+      data: { lastPolledAt: account.lastPolledAt },
+    });
+  }
 
   return newOtps;
 }

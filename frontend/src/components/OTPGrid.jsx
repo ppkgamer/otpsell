@@ -448,7 +448,7 @@ export default function OTPGrid() {
   useEffect(() => {
     if (live) return
     fetchOtps()
-    const id = setInterval(fetchOtps, 15000)
+    const id = setInterval(fetchOtps, 60000)
     return () => clearInterval(id)
   }, [live, fetchOtps])
 

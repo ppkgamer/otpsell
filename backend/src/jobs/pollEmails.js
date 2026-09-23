@@ -5,15 +5,17 @@ const prisma = require('../lib/prisma');
 const { notifyNewOtps } = require('../lib/wsHub');
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const LAST_POLLED_CHECKPOINT_MS = 15 * 60 * 1000;
 let accountsCache = null;
 let cacheExpiry = 0;
+let pollInProgress = false;
 
 async function getAccounts() {
   if (accountsCache && Date.now() < cacheExpiry) {
     return accountsCache;
   }
 
-  accountsCache = await prisma.gmailAccount.findMany({
+  const accounts = await prisma.gmailAccount.findMany({
     where: { isActive: true, user: { isActive: true } },
     select: {
       id: true,
@@ -25,6 +27,17 @@ async function getAccounts() {
       isActive: true,
     },
   });
+  const previousAccounts = new Map((accountsCache || []).map((account) => [account.id, account]));
+  accountsCache = accounts.map((account) => {
+    const previous = previousAccounts.get(account.id);
+    return {
+      ...account,
+      // Preserve the fresher in-memory cursor across cache refreshes. The DB
+      // cursor is deliberately checkpointed less often to reduce writes.
+      lastPolledAt: previous?.lastPolledAt ?? account.lastPolledAt,
+      lastCheckpointAt: previous?.lastCheckpointAt ?? account.lastPolledAt,
+    };
+  });
   cacheExpiry = Date.now() + CACHE_TTL_MS;
   return accountsCache;
 }
@@ -34,29 +47,48 @@ function invalidateAccountsCache() {
 }
 
 async function runPoll() {
+  if (pollInProgress) {
+    console.warn('[poll] Previous run is still active; skipping overlapping run');
+    return;
+  }
+
+  pollInProgress = true;
   let accounts;
   try {
     accounts = await getAccounts();
   } catch (err) {
     console.error('[poll] Error fetching accounts:', err.message);
+    pollInProgress = false;
     return;
   }
 
-  if (accounts.length === 0) return;
+  try {
+    for (const account of accounts) {
+      try {
+        const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
+        const otps = await pollFn(account, { persistLastPolledAt: false });
+        const checkpointDue = !account.lastCheckpointAt
+          || account.lastPolledAt.getTime() - account.lastCheckpointAt.getTime() >= LAST_POLLED_CHECKPOINT_MS;
 
-  for (const account of accounts) {
-    try {
-      const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
-      const otps = await pollFn(account);
-      account.lastPolledAt = new Date();
-      if (otps.length > 0) {
-        await prisma.otp.createMany({ data: otps, skipDuplicates: true });
-        console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
-        notifyNewOtps(prisma, otps).catch((err) => console.error('[ws] notify error:', err.message));
+        if (otps.length > 0) {
+          await prisma.otp.createMany({ data: otps, skipDuplicates: true });
+          console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
+          notifyNewOtps(prisma, otps).catch((err) => console.error('[ws] notify error:', err.message));
+        }
+
+        if (otps.length > 0 || checkpointDue) {
+          await prisma.gmailAccount.update({
+            where: { id: account.id },
+            data: { lastPolledAt: account.lastPolledAt },
+          });
+          account.lastCheckpointAt = account.lastPolledAt;
+        }
+      } catch (err) {
+        console.error(`[poll] Error on ${account.email}:`, err.message);
       }
-    } catch (err) {
-      console.error(`[poll] Error on ${account.email}:`, err.message);
     }
+  } finally {
+    pollInProgress = false;
   }
 }
 
@@ -111,11 +143,11 @@ async function runCleanup() {
 }
 
 function startPollingJob() {
-  cron.schedule('*/30 * * * * *', runPoll);
+  cron.schedule('0 * * * * *', runPoll);
   cron.schedule('*/10 * * * *', runCleanup); // cleanup every 10 minutes
   cron.schedule('*/5 * * * *', runToEmailRecovery); // toEmail recovery every 5 minutes
   runCleanup(); // cleanup on startup
-  console.log('[poll] Job started — every 30 seconds');
+  console.log('[poll] Job started — every 60 seconds');
   console.log('[cleanup] Job started — every 10 minutes');
   console.log('[toEmail-recovery] Job started — every 5 minutes');
 }

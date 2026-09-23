@@ -38,13 +38,13 @@ export const translations = {
     otp_copied: 'Copied!',
     otp_refresh: '↻ Refresh',
     otp_empty_title: 'Waiting for OTP...',
-    otp_empty_sub: 'System polls every 15 seconds',
+    otp_empty_sub: 'System checks connected mailboxes every minute',
     otp_refresh_in: 'refresh in',
     otp_has_new: 'New',
 
     // Gmail
     gmail_title: 'Gmail Accounts',
-    gmail_subtitle: 'System polls OTP from connected Gmail every 15 seconds',
+    gmail_subtitle: 'System checks OTP from connected Gmail every minute',
     gmail_connect: '+ Connect Gmail',
     gmail_connect_hotmail: '+ Connect Hotmail',
     gmail_connecting: 'Connecting...',
@@ -154,13 +154,13 @@ export const translations = {
     otp_copied: 'Copied!',
     otp_refresh: '↻ refresh',
     otp_empty_title: 'รอ OTP เข้า...',
-    otp_empty_sub: 'ระบบ poll ทุก 15 วินาที',
+    otp_empty_sub: 'ระบบตรวจอีเมลที่เชื่อมต่อทุก 1 นาที',
     otp_refresh_in: 'refresh ใน',
     otp_has_new: 'มีใหม่',
 
     // Gmail
     gmail_title: 'Gmail Accounts',
-    gmail_subtitle: 'ระบบ poll OTP จาก Gmail ที่เชื่อมต่อทุก 15 วินาที',
+    gmail_subtitle: 'ระบบตรวจ OTP จาก Gmail ที่เชื่อมต่อทุก 1 นาที',
     gmail_connect: '+ เชื่อมต่อ Gmail',
     gmail_connect_hotmail: '+ เชื่อมต่อ Hotmail',
     gmail_connecting: 'กำลังเชื่อมต่อ...',
