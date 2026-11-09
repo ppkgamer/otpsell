@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const prisma = require('../lib/prisma');
+const { getPollSinceMs, hasSeenMessage, markMessageSeen, forgetMessages } = require('../lib/pollCursor');
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 
@@ -649,9 +650,8 @@ async function pollGmailAccount(gmailAccount, { persistLastPolledAt = true } = {
 
   const gmail = google.gmail({ version: 'v1', auth });
 
-  const since = gmailAccount.lastPolledAt
-    ? Math.floor(gmailAccount.lastPolledAt.getTime() / 1000)
-    : Math.floor((Date.now() - 30000) / 1000);
+  const pollStartedAt = new Date();
+  const since = Math.floor(getPollSinceMs(gmailAccount) / 1000);
 
   const listRes = await gmail.users.messages.list({
     userId: 'me',
@@ -663,16 +663,22 @@ async function pollGmailAccount(gmailAccount, { persistLastPolledAt = true } = {
   const newOtps = [];
 
   for (const msg of messages) {
+    if (hasSeenMessage(gmailAccount, msg.id)) continue;
+
     const exists = await prisma.otp.findUnique({
       where: { messageId_gmailAccountId: { messageId: msg.id, gmailAccountId: gmailAccount.id } },
     });
-    if (exists) continue;
+    if (exists) {
+      markMessageSeen(gmailAccount, msg.id);
+      continue;
+    }
 
     const detail = await gmail.users.messages.get({
       userId: 'me',
       id: msg.id,
       format: 'full',
     });
+    markMessageSeen(gmailAccount, msg.id);
 
     const headers = detail.data.payload.headers;
     const sender = headers.find((h) => h.name === 'From')?.value ?? null;
@@ -788,7 +794,8 @@ async function pollGmailAccount(gmailAccount, { persistLastPolledAt = true } = {
     }
   }
 
-  gmailAccount.lastPolledAt = new Date();
+  forgetMessages(gmailAccount, newOtps);
+  gmailAccount.lastPolledAt = pollStartedAt;
   if (persistLastPolledAt) {
     await prisma.gmailAccount.update({
       where: { id: gmailAccount.id },

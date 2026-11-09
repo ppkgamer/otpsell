@@ -11,8 +11,14 @@ export default function GmailAccounts() {
   const [connectingHotmail, setConnectingHotmail] = useState(false)
   const [actionId, setActionId] = useState(null)
   const [dialog, setDialog] = useState(null)
+  const [search, setSearch] = useState('')
   const { t, lang } = useLang()
   const locale = lang === 'en' ? 'en-US' : 'th-TH'
+
+  const query = search.trim().toLowerCase()
+  const filteredAccounts = query
+    ? accounts.filter(acc => acc.email.toLowerCase().includes(query))
+    : accounts
 
   async function load() {
     try {
@@ -86,6 +92,34 @@ export default function GmailAccounts() {
         </div>
       </div>
 
+      {!loading && accounts.length > 0 && (
+        <div className="mb-4">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-sm">🔍</span>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={lang === 'th' ? 'ค้นหาอีเมล...' : 'Search email...'}
+              aria-label={lang === 'th' ? 'ค้นหาอีเมล' : 'Search email'}
+              className="input-dark w-full !pl-9 !pr-9"
+            />
+            {search && (
+              <button onClick={() => setSearch('')}
+                aria-label={lang === 'th' ? 'ล้างการค้นหา' : 'Clear search'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors text-sm">
+                ✕
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-600 mt-1.5 px-1">
+            {query
+              ? (lang === 'th' ? `พบ ${filteredAccounts.length} จาก ${accounts.length} บัญชี` : `${filteredAccounts.length} of ${accounts.length} account(s)`)
+              : (lang === 'th' ? `ทั้งหมด ${accounts.length} บัญชี` : `${accounts.length} account(s)`)}
+          </p>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">{[1,2,3].map(i => <ListRowSkeleton key={i} />)}</div>
       ) : accounts.length === 0 ? (
@@ -94,9 +128,18 @@ export default function GmailAccounts() {
           <p className="text-slate-400 font-medium">{t('gmail_empty_title')}</p>
           <p className="text-slate-600 text-sm mt-1">{t('gmail_empty_sub')}</p>
         </div>
+      ) : filteredAccounts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+          <p className="text-slate-400 font-medium">
+            {lang === 'th' ? `ไม่พบอีเมล "${search}"` : `No email matching "${search}"`}
+          </p>
+          <button onClick={() => setSearch('')} className="text-xs text-purple-400 mt-2 hover:text-purple-300">
+            {lang === 'th' ? 'ล้างการค้นหา' : 'Clear search'}
+          </button>
+        </div>
       ) : (
         <div className="space-y-2">
-          {accounts.map(acc => (
+          {filteredAccounts.map(acc => (
             <div key={acc.id}
               className={`card-dark px-4 py-3.5 flex items-center gap-3 transition-opacity ${actionId === acc.id ? 'opacity-40' : ''}`}>
               <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />

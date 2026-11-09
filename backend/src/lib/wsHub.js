@@ -82,6 +82,7 @@ function initWsServer(httpServer, prisma) {
       const gmailIds = await getAccessibleGmailIds(userId, role);
 
       await sendInitialSnapshot(ws, prisma, gmailIds, limit);
+      ws._userId = userId;
       subscribe(ws, gmailIds);
 
       ws.isAlive = true;
@@ -133,11 +134,19 @@ async function notifyNewOtps(prisma, entries) {
     include: { gmailAccount: { select: { email: true } } },
   });
 
+  // A socket can outlive its assignment, so expiry is re-checked on every push.
+  const expiredAssignments = await prisma.subUserGmail.findMany({
+    where: { gmailAccountId: { in: relevantGmailIds }, expiresAt: { lte: new Date() } },
+    select: { subUserId: true, gmailAccountId: true },
+  });
+  const blocked = new Set(expiredAssignments.map((a) => `${a.subUserId}:${a.gmailAccountId}`));
+
   for (const row of rows) {
     const sockets = subscriptionsByGmailId.get(row.gmailAccountId);
     if (!sockets || sockets.size === 0) continue;
     const payload = JSON.stringify({ type: 'new_otp', otp: row });
     for (const ws of sockets) {
+      if (blocked.has(`${ws._userId}:${row.gmailAccountId}`)) continue;
       if (ws.readyState === ws.OPEN) ws.send(payload);
     }
   }

@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { TTLCache } = require('../lib/cache');
-const { getAccessibleGmailIds } = require('../lib/access');
+const { getAccessibleGmailIds, activeAssignmentFilter } = require('../lib/access');
 
 const router = express.Router();
 
@@ -61,7 +61,7 @@ router.get('/feed', async (req, res) => {
       if (subuserid) {
         // กรองเฉพาะ Gmail ที่ assign ให้ sub-user นี้
         const assignments = await prisma.subUserGmail.findMany({
-          where: { subUserId: subuserid },
+          where: { subUserId: subuserid, ...activeAssignmentFilter() },
           select: { gmailAccountId: true },
         });
         if (assignments.length === 0) return [];
@@ -104,7 +104,7 @@ router.get('/public', async (req, res) => {
       if (!subUser.isActive) return { status: 403, body: { error: 'Account disabled' } };
 
       const assignments = await prisma.subUserGmail.findMany({
-        where: { subUserId: subUser.id },
+        where: { subUserId: subUser.id, ...activeAssignmentFilter() },
         select: { gmailAccountId: true },
       });
       if (assignments.length === 0) return { status: 200, body: [] };

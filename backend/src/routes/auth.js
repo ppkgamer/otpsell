@@ -11,6 +11,47 @@ function signToken(user) {
   return jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const MAX_EXPIRY_DAYS = 3650;
+const MAX_BULK_RENEWALS = 500;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Renewals add to the time still remaining; an expired or unset assignment
+// counts from today. Expiry is the end of the final day, Thailand time, so the
+// sold period always covers that whole day regardless of the server timezone.
+function computeExpiresAt(days, currentExpiry) {
+  const base = currentExpiry && currentExpiry > new Date() ? currentExpiry.getTime() : Date.now();
+  const bangkok = new Date(base + BANGKOK_OFFSET_MS);
+  bangkok.setUTCDate(bangkok.getUTCDate() + days);
+  bangkok.setUTCHours(23, 59, 59, 999);
+  return new Date(bangkok.getTime() - BANGKOK_OFFSET_MS);
+}
+
+function bangkokDateString(daysFromToday) {
+  return new Date(Date.now() + BANGKOK_OFFSET_MS + daysFromToday * DAY_MS).toISOString().slice(0, 10);
+}
+
+function isSelectableExpiryDate(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return false;
+  return date >= bangkokDateString(1) && date <= bangkokDateString(MAX_EXPIRY_DAYS);
+}
+
+function expiryInputError({ days, date }) {
+  if (date !== undefined) return isSelectableExpiryDate(date) ? null : 'date is not selectable';
+  if (days === null || (Number.isInteger(days) && days >= 1 && days <= MAX_EXPIRY_DAYS)) return null;
+  return `days must be a whole number from 1 to ${MAX_EXPIRY_DAYS}, or null`;
+}
+
+// { days } adds to the current expiry, { date } sets that exact date, and
+// { days: null } removes the expiry.
+function nextExpiry({ days, date }, currentExpiry) {
+  if (date !== undefined) return new Date(`${date}T23:59:59.999+07:00`);
+  return days === null ? null : computeExpiresAt(days, currentExpiry);
+}
+
 async function generateUniqueCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const digits = '23456789';
@@ -195,7 +236,11 @@ router.delete('/subuser/:id', authenticate, requireRole(['USER']), async (req, r
 router.post('/subuser/:subUserId/assign', authenticate, requireRole(['USER']), async (req, res) => {
   try {
     const { subUserId } = req.params;
-    const { gmailAccountId } = req.body;
+    const { gmailAccountId, days, date } = req.body;
+    const hasExpiry = days !== undefined || date !== undefined;
+    const inputError = hasExpiry ? expiryInputError({ days, date }) : null;
+    if (inputError) return res.status(400).json({ error: inputError });
+
     const subUser = await prisma.user.findFirst({ where: { id: subUserId, parentId: req.userId } });
     if (!subUser) return res.status(404).json({ error: 'Sub-user not found' });
     const gmail = await prisma.gmailAccount.findFirst({ where: { id: gmailAccountId, userId: req.userId } });
@@ -213,7 +258,9 @@ router.post('/subuser/:subUserId/assign', authenticate, requireRole(['USER']), a
       return res.status(400).json({ error: 'Gmail นี้ถูก assign ให้ sub-user อื่นแล้ว' });
     }
 
-    const assignment = await prisma.subUserGmail.create({ data: { subUserId, gmailAccountId } });
+    const assignment = await prisma.subUserGmail.create({
+      data: { subUserId, gmailAccountId, expiresAt: hasExpiry ? nextExpiry({ days, date }, null) : null },
+    });
     res.json(assignment);
   } catch (err) {
     if (err.code === 'P2002') return res.status(400).json({ error: 'Already assigned' });
@@ -232,6 +279,88 @@ router.delete('/subuser/:subUserId/assign/:gmailAccountId', authenticate, requir
     if (gmail?.isAdminManaged) return res.status(403).json({ error: 'Cannot remove admin-managed account' });
     await prisma.subUserGmail.deleteMany({ where: { subUserId, gmailAccountId } });
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/auth/subuser/:subUserId/assign/:gmailAccountId/expiry
+// Body: { days: 30 } adds to the current expiry; { date: 'YYYY-MM-DD' } sets
+// that exact date; { days: null } removes the expiry.
+router.patch('/subuser/:subUserId/assign/:gmailAccountId/expiry', authenticate, requireRole(['USER']), async (req, res) => {
+  try {
+    const { subUserId, gmailAccountId } = req.params;
+    const { days, date } = req.body;
+    const inputError = expiryInputError({ days, date });
+    if (inputError) return res.status(400).json({ error: inputError });
+
+    const subUser = await prisma.user.findFirst({ where: { id: subUserId, parentId: req.userId } });
+    if (!subUser) return res.status(404).json({ error: 'Sub-user not found' });
+    const gmail = await prisma.gmailAccount.findUnique({ where: { id: gmailAccountId } });
+    if (gmail?.isAdminManaged) return res.status(403).json({ error: 'Cannot change admin-managed account' });
+
+    const assignment = await prisma.subUserGmail.findUnique({
+      where: { subUserId_gmailAccountId: { subUserId, gmailAccountId } },
+    });
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+    const updated = await prisma.subUserGmail.update({
+      where: { id: assignment.id },
+      data: { expiresAt: nextExpiry({ days, date }, assignment.expiresAt) },
+      select: { expiresAt: true },
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/auth/subusers/expiry — renew many assignments at once, all or none
+// Body: { assignmentIds: [...], days: 30 } or { assignmentIds: [...], date: 'YYYY-MM-DD' }
+router.patch('/subusers/expiry', authenticate, requireRole(['USER']), async (req, res) => {
+  try {
+    const { assignmentIds, days, date } = req.body;
+    if (!Array.isArray(assignmentIds) || assignmentIds.length === 0 || assignmentIds.length > MAX_BULK_RENEWALS
+      || !assignmentIds.every((id) => typeof id === 'string')) {
+      return res.status(400).json({ error: `assignmentIds must list 1 to ${MAX_BULK_RENEWALS} ids` });
+    }
+    if (date === undefined && days === null) return res.status(400).json({ error: 'days is required' });
+    const inputError = expiryInputError({ days, date });
+    if (inputError) return res.status(400).json({ error: inputError });
+
+    const ids = [...new Set(assignmentIds)];
+    const assignments = await prisma.subUserGmail.findMany({
+      where: { id: { in: ids }, subUser: { parentId: req.userId } },
+      select: { id: true, expiresAt: true, gmailAccount: { select: { isAdminManaged: true } } },
+    });
+    if (assignments.length !== ids.length) return res.status(404).json({ error: 'Assignment not found' });
+    if (assignments.some((a) => a.gmailAccount.isAdminManaged)) {
+      return res.status(403).json({ error: 'Cannot change admin-managed account' });
+    }
+
+    await prisma.$transaction(assignments.map((a) => prisma.subUserGmail.update({
+      where: { id: a.id },
+      data: { expiresAt: nextExpiry({ days, date }, a.expiresAt) },
+    })));
+    res.json({ updated: assignments.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/my-expiries — the signed-in sub-user's accounts that have an expiry
+router.get('/my-expiries', authenticate, requireRole(['SUBUSER']), async (req, res) => {
+  try {
+    const assignments = await prisma.subUserGmail.findMany({
+      where: { subUserId: req.userId, expiresAt: { not: null } },
+      select: { expiresAt: true, gmailAccount: { select: { id: true, email: true } } },
+      orderBy: { expiresAt: 'asc' },
+    });
+    res.json(assignments.map((a) => ({
+      gmailAccountId: a.gmailAccount.id,
+      email: a.gmailAccount.email,
+      expiresAt: a.expiresAt,
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

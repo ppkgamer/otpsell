@@ -8,6 +8,7 @@ const {
   extractOriginalRecipient,
 } = require('./gmail.service');
 const prisma = require('../lib/prisma');
+const { getPollSinceMs, hasSeenMessage, markMessageSeen, forgetMessages } = require('../lib/pollCursor');
 
 // /common = personal (Hotmail/Outlook.com) + organizational accounts
 const MS_AUTH_BASE   = 'https://login.microsoftonline.com/common/oauth2/v2.0';
@@ -134,9 +135,8 @@ async function fetchFolderMessages(account, token, folderPath, since) {
 async function pollHotmailAccount(account, { persistLastPolledAt = true } = {}) {
   let token = await getValidToken(account);
 
-  const since = account.lastPolledAt
-    ? account.lastPolledAt.toISOString()
-    : new Date(Date.now() - 30000).toISOString();
+  const pollStartedAt = new Date();
+  const since = new Date(getPollSinceMs(account)).toISOString();
 
   // Inbox/mailbox หลัก (รวมเมลแท็บ "อื่นๆ" ของ Focused Inbox ด้วย เพราะยังอยู่ใน Inbox folder เดิม)
   const inboxResult = await fetchFolderMessages(account, token, null, since);
@@ -165,9 +165,12 @@ async function pollHotmailAccount(account, { persistLastPolledAt = true } = {}) 
   const newOtps  = [];
 
   for (const msg of messages) {
+    if (hasSeenMessage(account, msg.id)) continue;
+
     const exists = await prisma.otp.findUnique({
       where: { messageId_gmailAccountId: { messageId: msg.id, gmailAccountId: account.id } },
     });
+    markMessageSeen(account, msg.id);
     if (exists) continue;
 
     const sender  = msg.from?.emailAddress?.address || '';
@@ -217,7 +220,8 @@ async function pollHotmailAccount(account, { persistLastPolledAt = true } = {}) 
     }
   }
 
-  account.lastPolledAt = new Date();
+  forgetMessages(account, newOtps);
+  account.lastPolledAt = pollStartedAt;
   if (persistLastPolledAt) {
     await prisma.gmailAccount.update({
       where: { id: account.id },

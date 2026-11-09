@@ -6,6 +6,8 @@ const { notifyNewOtps } = require('../lib/wsHub');
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const LAST_POLLED_CHECKPOINT_MS = 15 * 60 * 1000;
+// Kept below the Prisma connection_limit so API requests still get a connection.
+const POLL_CONCURRENCY = 8;
 let accountsCache = null;
 let cacheExpiry = 0;
 let pollInProgress = false;
@@ -36,6 +38,7 @@ async function getAccounts() {
       // cursor is deliberately checkpointed less often to reduce writes.
       lastPolledAt: previous?.lastPolledAt ?? account.lastPolledAt,
       lastCheckpointAt: previous?.lastCheckpointAt ?? account.lastPolledAt,
+      seenMessages: previous?.seenMessages,
     };
   });
   cacheExpiry = Date.now() + CACHE_TTL_MS;
@@ -44,6 +47,31 @@ async function getAccounts() {
 
 function invalidateAccountsCache() {
   cacheExpiry = 0;
+}
+
+async function pollAccount(account) {
+  try {
+    const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
+    const otps = await pollFn(account, { persistLastPolledAt: false });
+    const checkpointDue = !account.lastCheckpointAt
+      || account.lastPolledAt.getTime() - account.lastCheckpointAt.getTime() >= LAST_POLLED_CHECKPOINT_MS;
+
+    if (otps.length > 0) {
+      await prisma.otp.createMany({ data: otps, skipDuplicates: true });
+      console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
+      notifyNewOtps(prisma, otps).catch((err) => console.error('[ws] notify error:', err.message));
+    }
+
+    if (otps.length > 0 || checkpointDue) {
+      await prisma.gmailAccount.update({
+        where: { id: account.id },
+        data: { lastPolledAt: account.lastPolledAt },
+      });
+      account.lastCheckpointAt = account.lastPolledAt;
+    }
+  } catch (err) {
+    console.error(`[poll] Error on ${account.email}:`, err.message);
+  }
 }
 
 async function runPoll() {
@@ -63,30 +91,13 @@ async function runPoll() {
   }
 
   try {
-    for (const account of accounts) {
-      try {
-        const pollFn = account.provider === 'hotmail' ? pollHotmailAccount : pollGmailAccount;
-        const otps = await pollFn(account, { persistLastPolledAt: false });
-        const checkpointDue = !account.lastCheckpointAt
-          || account.lastPolledAt.getTime() - account.lastCheckpointAt.getTime() >= LAST_POLLED_CHECKPOINT_MS;
-
-        if (otps.length > 0) {
-          await prisma.otp.createMany({ data: otps, skipDuplicates: true });
-          console.log(`[poll] ${account.email}: ${otps.length} item(s) found`);
-          notifyNewOtps(prisma, otps).catch((err) => console.error('[ws] notify error:', err.message));
-        }
-
-        if (otps.length > 0 || checkpointDue) {
-          await prisma.gmailAccount.update({
-            where: { id: account.id },
-            data: { lastPolledAt: account.lastPolledAt },
-          });
-          account.lastCheckpointAt = account.lastPolledAt;
-        }
-      } catch (err) {
-        console.error(`[poll] Error on ${account.email}:`, err.message);
+    let nextIndex = 0;
+    const workerCount = Math.min(POLL_CONCURRENCY, accounts.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextIndex < accounts.length) {
+        await pollAccount(accounts[nextIndex++]);
       }
-    }
+    }));
   } finally {
     pollInProgress = false;
   }
@@ -143,11 +154,11 @@ async function runCleanup() {
 }
 
 function startPollingJob() {
-  cron.schedule('0 * * * * *', runPoll);
+  cron.schedule('*/10 * * * * *', runPoll);
   cron.schedule('*/10 * * * *', runCleanup); // cleanup every 10 minutes
   cron.schedule('*/5 * * * *', runToEmailRecovery); // toEmail recovery every 5 minutes
   runCleanup(); // cleanup on startup
-  console.log('[poll] Job started — every 60 seconds');
+  console.log('[poll] Job started — every 10 seconds');
   console.log('[cleanup] Job started — every 10 minutes');
   console.log('[toEmail-recovery] Job started — every 5 minutes');
 }

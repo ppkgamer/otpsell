@@ -3,6 +3,8 @@ import api from '../lib/api'
 import { useLang } from '../context/LangContext'
 import ConfirmDialog from './ConfirmDialog'
 import { ListRowSkeleton } from './Skeleton'
+import { AssignExpiryFields, ExpiringCopyList, ExpiryAlert, ExpiryBadge, ExpiryEditor } from './AccountExpiry'
+import BulkRenew from './BulkRenew'
 
 function CodeBadge({ code }) {
   const [copied, setCopied] = useState(false)
@@ -49,6 +51,7 @@ export default function SubUsers() {
   const [gmailSearch, setGmailSearch] = useState('')
   const [dialog, setDialog] = useState(null)
   const [expandedGmails, setExpandedGmails] = useState({})
+  const [assignExpiry, setAssignExpiry] = useState({})
   const { t, lang } = useLang()
 
   const toggleGmailList = (suId) => setExpandedGmails(p => ({ ...p, [suId]: !p[suId] }))
@@ -93,6 +96,17 @@ export default function SubUsers() {
       }
     })
   })
+
+  const expiryItems = subUsers.flatMap(su =>
+    su.assignedGmails
+      .filter(a => a.expiresAt && !a.gmailAccount.isAdminManaged)
+      .map(a => ({
+        key: `${su.id}-${a.gmailAccount.id}`,
+        email: a.gmailAccount.email,
+        expiresAt: a.expiresAt,
+        owner: su.username,
+      }))
+  )
 
   const gq = gmailSearch.trim().toLowerCase()
   const filteredGmails = gq.length >= 2
@@ -162,6 +176,9 @@ export default function SubUsers() {
         </form>
       )}
 
+      {!loading && <ExpiryAlert items={expiryItems} showOwner />}
+      {!loading && <ExpiringCopyList items={expiryItems} />}
+
       {/* Gmail search across all accounts */}
       {!loading && gmailAccounts.length > 0 && (
         <div className="mb-4">
@@ -172,7 +189,7 @@ export default function SubUsers() {
               value={gmailSearch}
               onChange={e => setGmailSearch(e.target.value)}
               placeholder={lang === 'th' ? 'ค้นหา Gmail เพื่อดูว่าอยู่ใน sub-user ไหน...' : 'Search Gmail to find which sub-user it belongs to...'}
-              className="input-dark w-full pl-9 pr-9"
+              className="input-dark w-full !pl-9 !pr-9"
             />
             {gmailSearch && (
               <button onClick={() => setGmailSearch('')}
@@ -252,7 +269,7 @@ export default function SubUsers() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={lang === 'th' ? 'ค้นหาชื่อหรือ Code...' : 'Search name or code...'}
-            className="input-dark w-full pl-9 pr-9"
+            className="input-dark w-full !pl-9 !pr-9"
           />
           {search && (
             <button onClick={() => setSearch('')}
@@ -346,12 +363,14 @@ export default function SubUsers() {
                     <div className="space-y-1.5">
                       {visibleAssigned.map(a => (
                         <div key={a.gmailAccount.id}
-                          className="flex items-center justify-between gap-3 bg-emerald-500/8 border border-emerald-500/20 rounded-xl px-3 py-2.5">
-                          <div className="flex items-center gap-2 min-w-0">
+                          className="bg-emerald-500/8 border border-emerald-500/20 rounded-xl px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
                             <span className="text-sm text-emerald-300 font-mono truncate">
                               {a.gmailAccount.email}
                             </span>
+                            <ExpiryBadge expiresAt={a.expiresAt} />
                           </div>
                           <button
                             onClick={() => setDialog({
@@ -372,6 +391,27 @@ export default function SubUsers() {
                             {busy[`u-${su.id}-${a.gmailAccount.id}`] ? '...' : lang === 'th' ? 'ลบ' : 'Remove'}
                           </button>
                         </div>
+                        <ExpiryEditor
+                          expiresAt={a.expiresAt}
+                          busy={busy[`e-${su.id}-${a.gmailAccount.id}`]}
+                          onSave={body => op(`e-${su.id}-${a.gmailAccount.id}`, () =>
+                            api.patch(`/auth/subuser/${su.id}/assign/${a.gmailAccount.id}/expiry`, body)
+                          )}
+                          onClear={() => op(`e-${su.id}-${a.gmailAccount.id}`, () =>
+                            api.patch(`/auth/subuser/${su.id}/assign/${a.gmailAccount.id}/expiry`, { days: null })
+                          )}
+                          confirmClear={doClear => setDialog({
+                            icon: '📅',
+                            title: lang === 'th' ? 'ไม่กำหนดวันหมดอายุ' : 'Remove expiry',
+                            message: lang === 'th'
+                              ? `ลบวันหมดอายุของ "${a.gmailAccount.email}" ใน ${su.username}?\nบัญชีนี้จะใช้งานได้โดยไม่มีวันหมดอายุ`
+                              : `Remove the expiry of "${a.gmailAccount.email}" for ${su.username}?\nThis account will no longer expire.`,
+                            confirmLabel: lang === 'th' ? 'ยืนยัน' : 'Confirm',
+                            cancelLabel: lang === 'th' ? 'ยกเลิก' : 'Cancel',
+                            onConfirm: doClear,
+                          })}
+                        />
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -389,6 +429,8 @@ export default function SubUsers() {
                     </div>
                   )}
                 </div>
+
+                <BulkRenew subUser={su} confirm={setDialog} onSaved={load} />
 
                 {/* Add Gmail — multi-select */}
                 {gmailAccounts.length === 0 ? (
@@ -443,17 +485,21 @@ export default function SubUsers() {
                       })}
                     </div>
 
+                    {multiSel[su.id]?.length > 0 && (
+                      <AssignExpiryFields onChange={value => setAssignExpiry(p => ({ ...p, [su.id]: value }))} />
+                    )}
+
                     {/* Assign button */}
                     <button
                       onClick={() => op(`a-${su.id}`, async () => {
                         const selected = multiSel[su.id] || []
                         if (!selected.length) return
                         for (const gmailId of selected) {
-                          await api.post(`/auth/subuser/${su.id}/assign`, { gmailAccountId: gmailId })
+                          await api.post(`/auth/subuser/${su.id}/assign`, { gmailAccountId: gmailId, ...assignExpiry[su.id]?.body })
                         }
                         clearSel(su.id)
                       })}
-                      disabled={busy[`a-${su.id}`] || !(multiSel[su.id]?.length)}
+                      disabled={busy[`a-${su.id}`] || !(multiSel[su.id]?.length) || assignExpiry[su.id]?.invalid}
                       className="btn-primary w-full py-2.5 text-sm disabled:opacity-40 transition-all">
                       {busy[`a-${su.id}`]
                         ? <span className="flex items-center justify-center gap-2">

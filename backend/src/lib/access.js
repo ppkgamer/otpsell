@@ -5,6 +5,11 @@ const ADMIN_IDS_CACHE_TTL_MS = 60 * 1000; // 1 minute
 let adminGmailIdsCache = null;
 let adminGmailIdsCacheExpiry = 0;
 
+// Prisma filter for sub-user assignments that have not expired.
+function activeAssignmentFilter() {
+  return { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] };
+}
+
 // Single source of truth for "which gmail accounts can this user see" —
 // used by both the REST /api/otp routes and the WS push server so the two
 // can never drift apart and leak access across roles/customers.
@@ -27,10 +32,10 @@ async function getAccessibleGmailIds(userId, role) {
   }
   // SUBUSER — เห็นเฉพาะที่ User assign ให้
   const assignments = await prisma.subUserGmail.findMany({
-    where: { subUserId: userId },
+    where: { subUserId: userId, ...activeAssignmentFilter() },
     select: { gmailAccountId: true },
   });
   return assignments.map((a) => a.gmailAccountId);
 }
 
-module.exports = { getAccessibleGmailIds };
+module.exports = { getAccessibleGmailIds, activeAssignmentFilter };

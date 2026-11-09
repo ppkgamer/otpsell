@@ -5,6 +5,7 @@ import OTPGrid from '../components/OTPGrid'
 import GmailAccounts from '../components/GmailAccounts'
 import SubUsers from '../components/SubUsers'
 import AdminPanel from '../components/AdminPanel'
+import { SubUserExpiryNotice } from '../components/AccountExpiry'
 import api from '../lib/api'
 import { useLang } from '../context/LangContext'
 
@@ -70,6 +71,7 @@ export default function Dashboard() {
       )}
 
       <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 relative">
+        {activeTab === 'otps' && user.role === 'SUBUSER' && <SubUserExpiryNotice />}
         {activeTab === 'otps' && <OTPGrid />}
         {activeTab === 'gmail' && user.role !== 'SUBUSER' && <GmailAccounts />}
         {activeTab === 'subusers' && user.role === 'USER' && <SubUsers />}
