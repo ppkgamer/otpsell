@@ -157,6 +157,83 @@ router.get('/stats', authenticate, requireRole(['ADMIN']), async (req, res) => {
   }
 });
 
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const bangkokStart = (date) => new Date(`${date}T00:00:00+07:00`);
+
+function summarizeAdditions(accounts) {
+  const hotmail = accounts.filter((a) => a.provider === 'hotmail').length;
+  return {
+    total: accounts.length,
+    gmail: accounts.length - hotmail,
+    hotmail,
+    byAdmin: accounts.filter((a) => a.isAdminManaged).length,
+  };
+}
+
+// GET /api/admin/analytics/mail-additions?month=YYYY-MM — mailboxes added per
+// customer, using Thailand calendar days. Counts mailboxes still in the system.
+router.get('/analytics/mail-additions', authenticate, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const today = new Date(Date.now() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+    const currentMonth = today.slice(0, 7);
+    const month = req.query.month ?? currentMonth;
+    if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      return res.status(400).json({ error: 'month must be YYYY-MM' });
+    }
+
+    const [year, monthNumber] = month.split('-').map(Number);
+    const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 7);
+    const monthStart = bangkokStart(`${month}-01`);
+    const monthEnd = bangkokStart(`${nextMonth}-01`);
+    const todayStart = bangkokStart(today);
+
+    const users = await prisma.user.findMany({
+      where: { OR: [{ role: 'USER' }, { gmailAccounts: { some: {} } }] },
+      select: {
+        id: true, username: true, email: true, plan: true, isActive: true,
+        gmailAccounts: {
+          select: { id: true, email: true, provider: true, isAdminManaged: true, isActive: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    const all = users.flatMap((u) => u.gmailAccounts);
+    const inMonth = (a) => a.createdAt >= monthStart && a.createdAt < monthEnd;
+    const addedToday = (a) => a.createdAt >= todayStart;
+
+    const rows = users
+      .map((u) => {
+        const added = u.gmailAccounts.filter(inMonth);
+        return {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          plan: u.plan,
+          isActive: u.isActive,
+          today: u.gmailAccounts.filter(addedToday).length,
+          month: summarizeAdditions(added),
+          totalMailboxes: u.gmailAccounts.length,
+          accounts: added,
+        };
+      })
+      .sort((a, b) => b.month.total - a.month.total
+        || b.totalMailboxes - a.totalMailboxes
+        || a.username.localeCompare(b.username));
+
+    res.json({
+      month,
+      currentMonth,
+      today: all.filter(addedToday).length,
+      monthSummary: summarizeAdditions(all.filter(inMonth)),
+      totalMailboxes: all.length,
+      users: rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/plans — plan info
 router.get('/plans', authenticate, requireRole(['ADMIN']), (req, res) => {
   res.json(PLANS);

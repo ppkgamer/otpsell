@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import api from '../lib/api'
 import { useLang } from '../context/LangContext'
 import { StatCardSkeleton, UserCardSkeleton } from './Skeleton'
+import MailAnalytics, { StatCard } from './MailAnalytics'
 
 const PLAN_STYLE = {
   FREE:  'bg-slate-500/20 text-slate-400 border-slate-500/30',
@@ -95,15 +96,6 @@ function CreateUserButton({ onCreated }) {
         </div>
       )}
     </>
-  )
-}
-
-function StatCard({ value, label, color }) {
-  return (
-    <div className="card-dark p-4 sm:p-5 text-center">
-      <div className={`text-3xl sm:text-4xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs sm:text-sm text-slate-500 mt-1">{label}</div>
-    </div>
   )
 }
 
@@ -538,6 +530,7 @@ export default function AdminPanel() {
           <StatCard value={stats.totalOtpCount} label={t('admin_total_otps')} color="text-purple-400" />
         </div>
       )}
+      <MailAnalytics />
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-white text-base sm:text-lg">{t('admin_title')} ({users.length})</h3>
