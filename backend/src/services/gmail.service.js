@@ -106,8 +106,12 @@ function isNetflixOTP(subject, body) {
     'कोड',
   ];
 
-  const matchSub = fragments.some(f => sub.includes(f));
-  const matchBod = fragments.some(f => bod.includes(f));
+  // Netflix's Thai sign-in email uses this wording instead of the older OTP phrases.
+  const thaiSignIn = 'ป้อนรหัสนี้เพื่อเข้าสู่ระบบ';
+  const thaiDeviceSignIn = 'ป้อนรหัสข้างต้นในอุปกรณ์เพื่อเข้าสู่ระบบ';
+  const matchSub = fragments.some(f => sub.includes(f)) || sub.includes(thaiSignIn);
+  const matchBod = fragments.some(f => bod.includes(f))
+    || bod.includes(thaiSignIn) || bod.includes(thaiDeviceSignIn);
   // Netflix OTP จริงๆ เป็น 4-6 หลักเสมอ — 8 หลักคือ show ID ไม่ใช่ OTP
   const hasOTPDigits = /\b\d{4,6}\b/.test(bod);
 
