@@ -118,7 +118,7 @@ async function fetchFolderMessages(account, token, folderPath, since) {
   const params = {
     $filter:  `receivedDateTime gt ${since}`,
     $top:     10,
-    $select:  'id,subject,from,receivedDateTime,body,bodyPreview',
+    $select:  'id,subject,from,toRecipients,receivedDateTime,body,bodyPreview',
     $orderby: 'receivedDateTime desc',
   };
   try {
